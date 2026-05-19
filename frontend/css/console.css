@@ -793,3 +793,48 @@ html, body {
   from { opacity:0; transform: translateX(12px); }
   to   { opacity:1; transform: translateX(0); }
 }
+
+/* ── V5.1 ADDITIONS ──────────────────────────────────────────── */
+
+/* Variable grid */
+.var-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+.var-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 4px 6px;
+  background: var(--panel-2);
+  font-family: var(--f-mono);
+  font-size: 0.65rem;
+}
+.var-token {
+  color: var(--amber);
+  min-width: 100px;
+  flex-shrink: 0;
+}
+.var-val {
+  color: var(--text);
+  flex: 1;
+}
+
+/* Pixel editor tools */
+.pe-tool.active {
+  background: var(--amber-dim);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+.tb-sep {
+  color: var(--border-hi);
+  padding: 0 0.25rem;
+  display: flex;
+  align-items: center;
+}
+
+/* Image tab sliders */
+#tab-image .param-range { width: 100%; }
