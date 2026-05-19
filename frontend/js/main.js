@@ -9,7 +9,7 @@ let isConnected = false;
 document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
   scanPorts();
-  loadAnimations();
+  // loadAnimations called from animations_ui.js
   loadSchedule();
   startPolling();
 });

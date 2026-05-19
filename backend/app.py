@@ -354,17 +354,18 @@ def api_text():
 # Animations
 @app.route("/api/animations")
 def api_anims():
-    return jsonify({"animations": [{"id": k, "name": v[1]} for k, v in ANIMATIONS.items()]})
+    return jsonify({"animations": list_animations()})
 
 @app.route("/api/animations/run", methods=["POST"])
 def api_run_anim():
     global _current_anim
     d    = request.get_json() or {}
     name = d.get("name", "flash")
-    fn_t = ANIMATIONS.get(name)
-    if not fn_t: return jsonify({"error": "Unknown animation"}), 404
+    fn = get_animation(name)
+    if not fn: return jsonify({"error": "Unknown animation"}), 404
     _current_anim = name
-    run_animation(fn_t[0], W, H)
+    opts = d.get("options", {})
+    run_animation(fn, W, H, **opts)
     return jsonify({"success": True})
 
 @app.route("/api/animations/stop", methods=["POST"])

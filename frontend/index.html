@@ -126,11 +126,23 @@
 
       <!-- ── ANIMATIONS TAB ── -->
       <div class="tab-pane" id="tab-anims">
-        <div class="pane-section">
-          <label class="field-label">SELECT ANIMATION</label>
-          <div class="anim-grid" id="anim-grid"></div>
-          <button class="btn-secondary full" style="margin-top:1.5rem"
-            onclick="apiPost('/api/animations/stop')">⏹ STOP ANIMATION</button>
+        <div class="anim-layout">
+          <!-- Left: categorised animation list -->
+          <div class="anim-list-col">
+            <div class="pane-section" style="border-bottom:none">
+              <div id="anim-container"></div>
+              <button class="btn-secondary full" style="margin-top:1rem"
+                onclick="apiPost('/api/animations/stop')">⏹ STOP</button>
+            </div>
+          </div>
+          <!-- Right: parameter panel -->
+          <div class="anim-params-col">
+            <div class="pane-section" style="height:100%">
+              <div id="anim-params">
+                <div class="param-empty">← Select an animation</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -201,6 +213,7 @@
   <div id="toasts"></div>
 
   <script src="js/preview.js"></script>
+  <script src="js/animations_ui.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>
