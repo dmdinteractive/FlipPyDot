@@ -54,18 +54,22 @@ def _path(name):
 def load(name):
     """Load a config file, returning defaults if missing or corrupt."""
     _ensure_dir()
+    default = DEFAULTS.get(name, {})
     p = _path(name)
     if os.path.isfile(p):
         try:
             with open(p) as f:
                 data = json.load(f)
-            # Merge with defaults so new keys always exist
-            merged = dict(DEFAULTS.get(name, {}))
+            if isinstance(default, list):
+                return data
+            merged = dict(default)
             merged.update(data)
             return merged
         except Exception as e:
             log.warning(f"Config load error ({name}): {e} — using defaults")
-    return dict(DEFAULTS.get(name, {}))
+    if isinstance(default, list):
+        return list(default)
+    return dict(default)
 
 
 def save(name, data):
