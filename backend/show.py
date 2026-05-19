@@ -1,16 +1,7 @@
 """
-show.py
--------
-Show file management — save and load complete show state to/from YAML.
-
-A show file contains:
-  - metadata (name, created, modified)
-  - device config (layout, port, baud)
-  - cue list
-  - scheduler entries
-  - content presets
+show.py — Show file save/load.
+Saves scheduler state to YAML. Atomic write — crash safe.
 """
-
 import os
 import yaml
 import logging
@@ -21,44 +12,47 @@ log = logging.getLogger(__name__)
 SHOWS_DIR = os.path.join(os.path.dirname(__file__), "..", "shows")
 
 
-def ensure_shows_dir():
+def _ensure():
     os.makedirs(SHOWS_DIR, exist_ok=True)
 
 
-def save_show(name: str, cue_engine, scheduler, config: dict) -> str:
-    ensure_shows_dir()
+def save_show(name, cue_engine, scheduler, config):
+    _ensure()
     data = {
         "meta": {
-            "name":     name,
-            "version":  5,
-            "saved":    datetime.now().isoformat(),
+            "name":    name,
+            "version": 7,
+            "saved":   datetime.now().isoformat(),
         },
-        "config":    config,
-        "cues":      cue_engine.to_list(),
-        "schedule":  [i.to_dict() for i in scheduler.items],
+        "config":   config,
+        "schedule": [i.to_dict() for i in scheduler.items] if scheduler else [],
     }
-    path = os.path.join(SHOWS_DIR, f"{name}.yaml")
-    with open(path, "w") as f:
-        yaml.dump(data, f, default_flow_style=False, sort_keys=False,
-                  allow_unicode=True)
+    path     = os.path.join(SHOWS_DIR, f"{name}.yaml")
+    path_tmp = path + ".tmp"
+    with open(path_tmp, "w") as f:
+        yaml.dump(data, f, default_flow_style=False,
+                  sort_keys=False, allow_unicode=True)
+    os.replace(path_tmp, path)
     log.info(f"Show saved: {path}")
     return path
 
 
-def load_show(name: str, cue_engine, scheduler) -> dict:
+def load_show(name, cue_engine, scheduler):
     path = os.path.join(SHOWS_DIR, f"{name}.yaml")
     if not os.path.isfile(path):
         raise FileNotFoundError(f"Show not found: {name}")
-    with open(path, "r") as f:
+    with open(path) as f:
         data = yaml.safe_load(f)
-    cue_engine.from_list(data.get("cues", []))
-    scheduler.from_list(data.get("schedule", []))
+    if scheduler:
+        from scheduler import ScheduleItem
+        scheduler.items = [
+            ScheduleItem.from_dict(d) for d in data.get("schedule", [])]
     log.info(f"Show loaded: {path}")
     return data
 
 
-def list_shows() -> list:
-    ensure_shows_dir()
+def list_shows():
+    _ensure()
     shows = []
     for fname in sorted(os.listdir(SHOWS_DIR)):
         if fname.endswith(".yaml"):
@@ -69,14 +63,13 @@ def list_shows() -> list:
                 shows.append({
                     "name":  d.get("meta", {}).get("name", fname[:-5]),
                     "saved": d.get("meta", {}).get("saved", ""),
-                    "cues":  len(d.get("cues", [])),
                 })
             except Exception:
-                shows.append({"name": fname[:-5], "saved": "", "cues": 0})
+                shows.append({"name": fname[:-5], "saved": ""})
     return shows
 
 
-def delete_show(name: str) -> bool:
+def delete_show(name):
     path = os.path.join(SHOWS_DIR, f"{name}.yaml")
     if os.path.isfile(path):
         os.remove(path)
