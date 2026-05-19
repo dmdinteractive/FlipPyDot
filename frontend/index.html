@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Flipdot Controller</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ──────────────────────────────────────────────── -->
+  <header>
+    <div class="header-left">
+      <div class="wordmark">
+        <span class="wm-flip">FLIP</span><span class="wm-dot">DOT</span>
+      </div>
+      <div class="header-meta">
+        <span class="meta-item" id="hdr-dims">84 × 42</span>
+        <span class="meta-sep">—</span>
+        <span class="meta-item" id="hdr-panels">18 CONTROLLERS</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-block" id="status-block">
+        <div class="status-indicator" id="status-dot"></div>
+        <span class="status-text" id="status-text">OFFLINE</span>
+      </div>
+      <button class="btn-connect" id="btn-connect" onclick="toggleConnect()">CONNECT</button>
+    </div>
+  </header>
+
+  <!-- ── MAIN ────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- PREVIEW COLUMN -->
+    <section class="col-preview">
+      <div class="section-label">LIVE PREVIEW</div>
+      <div class="preview-wrap">
+        <canvas id="preview"></canvas>
+      </div>
+      <div class="preview-footer">
+        <span id="fps-counter">— fps</span>
+        <span class="preview-dims">84 × 42 dots</span>
+      </div>
+
+      <!-- Quick actions -->
+      <div class="quick-actions">
+        <button class="qa-btn" onclick="apiPost('/api/display/fill')">
+          <span class="qa-icon">▪</span>FILL
+        </button>
+        <button class="qa-btn" onclick="apiPost('/api/display/clear')">
+          <span class="qa-icon">□</span>CLEAR
+        </button>
+        <button class="qa-btn" onclick="apiPost('/api/animations/stop')">
+          <span class="qa-icon">⏹</span>STOP
+        </button>
+      </div>
+
+      <!-- Port selector -->
+      <div class="port-section">
+        <div class="section-label">SERIAL PORT</div>
+        <div class="port-row">
+          <select id="port-select" class="port-select"></select>
+          <button class="icon-btn" onclick="scanPorts()" title="Scan">↻</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTROL COLUMN -->
+    <section class="col-control">
+
+      <!-- Tabs -->
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="text">TEXT</button>
+        <button class="tab-btn" data-tab="anims">ANIMATIONS</button>
+        <button class="tab-btn" data-tab="sched">SCHEDULE</button>
+      </nav>
+
+      <!-- ── TEXT TAB ── -->
+      <div class="tab-pane active" id="tab-text">
+        <div class="pane-section">
+          <label class="field-label">MESSAGE</label>
+          <textarea id="text-input" class="text-area" rows="3"
+            placeholder="Type your message…"></textarea>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">FONT SIZE</label>
+              <select id="font-size" class="field-select">
+                <option value="7">7px — 1 row</option>
+                <option value="10">10px</option>
+                <option value="14" selected>14px — 2 rows</option>
+                <option value="21">21px — 3 rows</option>
+                <option value="28">28px — 4 rows</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label">X OFFSET</label>
+              <input type="number" id="text-x" class="field-input" value="0" min="0" max="83">
+            </div>
+            <div class="field-group">
+              <label class="field-label">Y OFFSET</label>
+              <input type="number" id="text-y" class="field-input" value="0" min="0" max="41">
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <label class="toggle-label">
+              <input type="checkbox" id="text-scroll" class="toggle-check">
+              <span class="toggle-track"></span>
+              <span>SCROLL</span>
+            </label>
+            <label class="toggle-label">
+              <input type="checkbox" id="text-clear" class="toggle-check" checked>
+              <span class="toggle-track"></span>
+              <span>CLEAR FIRST</span>
+            </label>
+          </div>
+
+          <button class="btn-primary full" onclick="sendText()">SEND TO DISPLAY →</button>
+        </div>
+      </div>
+
+      <!-- ── ANIMATIONS TAB ── -->
+      <div class="tab-pane" id="tab-anims">
+        <div class="pane-section">
+          <label class="field-label">SELECT ANIMATION</label>
+          <div class="anim-grid" id="anim-grid"></div>
+          <button class="btn-secondary full" style="margin-top:1.5rem"
+            onclick="apiPost('/api/animations/stop')">⏹ STOP ANIMATION</button>
+        </div>
+      </div>
+
+      <!-- ── SCHEDULE TAB ── -->
+      <div class="tab-pane" id="tab-sched">
+        <div class="pane-section">
+          <label class="field-label">ADD ITEM</label>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">TYPE</label>
+              <select id="sched-type" class="field-select">
+                <option value="text">Text</option>
+                <option value="animation">Animation</option>
+              </select>
+            </div>
+            <div class="field-group" style="flex:2">
+              <label class="field-label">CONTENT</label>
+              <input type="text" id="sched-content" class="field-input"
+                placeholder="Message or animation name">
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field-group">
+              <label class="field-label">DURATION (sec)</label>
+              <input type="number" id="sched-dur" class="field-input" value="5" min="1">
+            </div>
+            <div class="field-group">
+              <label class="field-label">START TIME</label>
+              <input type="datetime-local" id="sched-start" class="field-input">
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <label class="toggle-label">
+              <input type="checkbox" id="sched-repeat" class="toggle-check">
+              <span class="toggle-track"></span>
+              <span>REPEAT EVERY</span>
+            </label>
+            <input type="number" id="sched-interval" class="field-input"
+              value="60" min="1" style="width:5rem;margin:0 0.5rem">
+            <span style="font-size:0.75rem;color:var(--mid)">SECONDS</span>
+          </div>
+
+          <button class="btn-primary" onclick="addScheduleItem()">+ ADD TO QUEUE</button>
+        </div>
+
+        <!-- Queue -->
+        <div class="pane-section" style="margin-top:1px">
+          <div class="sched-header">
+            <label class="field-label">QUEUE</label>
+            <div class="sched-controls">
+              <button class="chip-btn active" id="sched-run-btn" onclick="startScheduler()">▶ RUN</button>
+              <button class="chip-btn" onclick="stopScheduler()">⏸ PAUSE</button>
+            </div>
+          </div>
+          <div id="sched-list" class="sched-list">
+            <div class="empty-state">Queue is empty</div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Toast -->
+  <div id="toasts"></div>
+
+  <script src="js/preview.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
