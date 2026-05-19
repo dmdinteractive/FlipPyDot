@@ -9,7 +9,7 @@ let isConnected = false;
 document.addEventListener("DOMContentLoaded", () => {
   setupTabs();
   scanPorts();
-  // loadAnimations called from animations_ui.js
+  loadAnimations();
   loadSchedule();
   startPolling();
 });
@@ -133,29 +133,7 @@ async function sendText() {
   if (d?.success) toast(scroll ? "Scrolling…" : "Text sent");
 }
 
-// ── Animations ────────────────────────────────────────────────────
-async function loadAnimations() {
-  const grid = document.getElementById("anim-grid");
-  if (!grid) return;
-  const d = await apiGet("/api/animations");
-  if (!d?.animations) return;
-  grid.innerHTML = "";
-  d.animations.forEach(a => {
-    const card = document.createElement("div");
-    card.className    = "anim-card";
-    card.dataset.id   = a.id;
-    card.innerHTML    = `<span class="anim-name">${a.name}</span><span class="anim-id">${a.id.replace(/_/g," ").toUpperCase()}</span>`;
-    card.addEventListener("click", () => runAnim(a.id, card));
-    grid.appendChild(card);
-  });
-}
-
-async function runAnim(id, card) {
-  document.querySelectorAll(".anim-card").forEach(c => c.classList.remove("active"));
-  card?.classList.add("active");
-  const d = await apiPost("/api/animations/run", { name: id });
-  if (d?.success) toast("Running: " + id);
-}
+// ── Animations — handled by animations_ui.js ─────────────────────
 
 // ── Schedule ──────────────────────────────────────────────────────
 async function loadSchedule() {
