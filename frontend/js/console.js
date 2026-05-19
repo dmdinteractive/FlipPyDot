@@ -1,8 +1,7 @@
 /**
  * console.js — Flipdot Console V5 Application Logic
  */
-
-const API = "http://localhost:5000";
+const API = window.location.origin;
 let isConnected  = false;
 let editingCueId = null;
 
