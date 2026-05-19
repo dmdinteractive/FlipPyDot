@@ -16,8 +16,9 @@ FRONTEND = os.path.join(BASE, "..", "frontend")
 sys.path.insert(0, BASE)
 
 # ── Config ────────────────────────────────────────────────────────
-PORT      = "/dev/cu.usbserial-BG01DCHX"
-BAUD_RATE = 57600
+import os
+PORT      = os.environ.get("FLIPDOT_PORT", "/dev/cu.usbserial-BG01DCHX")
+BAUD_RATE = int(os.environ.get("FLIPDOT_BAUD", "57600"))
 LAYOUT    = [
     [0,  2,  4],
     [1,  3,  5],
