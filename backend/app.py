@@ -418,6 +418,61 @@ def api_stop_sched():
     scheduler_running = False
     return jsonify({"success": True})
 
+# ── Panel Mapping Wizard ──────────────────────────────────────────
+from wizard import PanelWizard
+
+def _get_ser():
+    return ser
+
+wizard = PanelWizard(_get_ser, total=18)
+
+@app.route("/api/wizard/state")
+def api_wizard_state():
+    return jsonify(wizard.get_state())
+
+@app.route("/api/wizard/start", methods=["POST"])
+def api_wizard_start():
+    d = request.get_json() or {}
+    return jsonify(wizard.start(d.get("total", 18)))
+
+@app.route("/api/wizard/assign", methods=["POST"])
+def api_wizard_assign():
+    d = request.get_json() or {}
+    return jsonify(wizard.assign(
+        address = int(d["address"]),
+        col     = int(d["col"]),
+        row     = int(d["row"]),
+        half    = d["half"]
+    ))
+
+@app.route("/api/wizard/skip", methods=["POST"])
+def api_wizard_skip():
+    d = request.get_json() or {}
+    return jsonify(wizard.skip(int(d.get("address", 0))))
+
+@app.route("/api/wizard/stop", methods=["POST"])
+def api_wizard_stop():
+    return jsonify(wizard.stop())
+
+@app.route("/api/wizard/save", methods=["POST"])
+def api_wizard_save():
+    """Build new LAYOUT from wizard mappings and apply it live."""
+    global panel, W, H, buffer
+    if not wizard.mappings:
+        return jsonify({"success": False, "error": "No mappings to save"}), 400
+    try:
+        from flippydot import Panel as FPPanel
+        new_layout = wizard.build_layout()
+        panel  = FPPanel(new_layout, 28, 7, module_rotation=0, screen_preview=False)
+        W      = panel.get_total_width()
+        H      = panel.get_total_height()
+        buffer = np.zeros((H, W), dtype=np.uint8)
+        log.info(f"Wizard: new layout applied — {W}x{H}")
+        log.info(f"Layout: {new_layout}")
+        return jsonify({"success": True, "layout": new_layout, "width": W, "height": H})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
 # ── Boot ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     log.info("─" * 50)

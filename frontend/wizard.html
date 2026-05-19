@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panel Mapping Wizard — Flipdot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    body { overflow-y: auto; }
+
+    .wizard-wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.12em;
+      color: var(--mid);
+      text-decoration: none;
+      margin-bottom: 2rem;
+      transition: color 0.15s;
+    }
+    .back-link:hover { color: var(--white); }
+
+    .wizard-title {
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      font-style: italic;
+      color: var(--white);
+      margin-bottom: 0.25rem;
+    }
+    .wizard-subtitle {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--mid);
+      margin-bottom: 2.5rem;
+    }
+
+    /* Progress */
+    .progress-wrap { margin-bottom: 2rem; }
+    .progress-bar {
+      height: 2px;
+      background: var(--border);
+      position: relative;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--white);
+      transition: width 0.4s ease;
+      width: 0%;
+    }
+    .progress-label {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      color: var(--mid);
+      margin-top: 0.5rem;
+    }
+
+    /* Steps */
+    .step { display: none; }
+    .step.active { display: block; }
+
+    /* Intro card */
+    .intro-card {
+      border: 1px solid var(--border);
+      padding: 2rem;
+      margin-bottom: 1px;
+    }
+    .intro-card p {
+      font-size: 0.9rem;
+      color: var(--mid);
+      line-height: 1.7;
+      margin-bottom: 1rem;
+    }
+    .intro-card p strong { color: var(--white); font-weight: 600; }
+
+    .notice {
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--mid);
+      letter-spacing: 0.05em;
+      line-height: 1.6;
+      margin: 1rem 0;
+    }
+
+    /* Mapping layout */
+    .mapping-layout {
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 1px;
+      align-items: start;
+    }
+
+    /* 3x3 panel grid */
+    .panel-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+    }
+
+    .phys-panel {
+      background: var(--black);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-half {
+      padding: 1rem 0.75rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.12s;
+      position: relative;
+    }
+    .panel-half:last-child { border-bottom: none; }
+    .panel-half:hover { background: var(--border); }
+    .panel-half:hover .half-cta { opacity: 1; }
+
+    .panel-half.mapped {
+      background: var(--white);
+    }
+    .panel-half.mapped .half-pos,
+    .panel-half.mapped .half-label,
+    .panel-half.mapped .half-addr { color: var(--black); }
+
+    .half-pos {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      color: var(--mid);
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+    .half-label {
+      font-family: var(--font-ui);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--white);
+      display: block;
+    }
+    .half-addr {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--mid);
+      display: block;
+      margin-top: 0.1rem;
+    }
+    .half-cta {
+      font-family: var(--font-mono);
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      color: var(--mid);
+      opacity: 0;
+      transition: opacity 0.12s;
+      position: absolute;
+      bottom: 0.5rem;
+      right: 0.75rem;
+    }
+
+    /* Info panel */
+    .info-panel {
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      position: sticky;
+      top: 1rem;
+    }
+
+    .current-addr {
+      font-family: var(--font-display);
+      font-size: 5rem;
+      color: var(--white);
+      line-height: 1;
+      margin: 0.5rem 0 1rem;
+      font-style: italic;
+    }
+
+    .info-instruction {
+      font-size: 0.8rem;
+      color: var(--mid);
+      line-height: 1.6;
+      margin-bottom: 1.5rem;
+    }
+    .info-instruction strong { color: var(--white); }
+
+    .btn-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+    }
+
+    /* Complete step */
+    .complete-wrap { text-align: center; padding: 3rem 2rem; }
+    .complete-num {
+      font-family: var(--font-display);
+      font-size: 8rem;
+      color: var(--white);
+      line-height: 1;
+      font-style: italic;
+    }
+    .complete-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: var(--mid);
+      margin-bottom: 2rem;
+    }
+
+    .mapping-summary {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      margin: 2rem 0;
+      text-align: left;
+    }
+    .map-cell {
+      background: var(--black);
+      padding: 0.6rem;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      color: var(--mid);
+    }
+    .map-cell .mc-addr {
+      font-size: 1.1rem;
+      color: var(--white);
+      display: block;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-left">
+      <div class="wordmark">
+        <span class="wm-flip">FLIP</span><span class="wm-dot">DOT</span>
+      </div>
+      <div class="header-meta">
+        <span class="meta-item">PANEL MAPPING WIZARD</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-block" id="status-block">
+        <div class="status-indicator" id="status-dot"></div>
+        <span class="status-text" id="status-text">CHECKING…</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="wizard-wrap">
+    <a href="/" class="back-link">← BACK TO DASHBOARD</a>
+
+    <!-- STEP: INTRO -->
+    <div class="step active" id="step-intro">
+      <div class="wizard-title">Panel Mapping</div>
+      <div class="wizard-subtitle">MAP YOUR 18 CONTROLLERS TO THE DISPLAY GRID</div>
+
+      <div class="intro-card">
+        <p>This wizard lights up <strong>one controller at a time</strong> on your physical display. Click its position in the grid to record the mapping. When all 18 are mapped, the layout is applied instantly — no restart needed.</p>
+        <p>Make sure all panels are <strong>powered on</strong> and the RS485 cable is connected before starting.</p>
+        <div class="notice">
+          NOTE — Each lit controller will show as a white 28×7 strip against a black display.<br>
+          Controllers 0–17 will be addressed in order. Press Skip if a controller doesn't respond.
+        </div>
+        <div style="display:flex;gap:1px;margin-top:1.5rem">
+          <button class="btn-primary" onclick="startWizard()">BEGIN MAPPING →</button>
+          <a href="/" class="btn-secondary" style="text-decoration:none;display:inline-flex;align-items:center;padding:0.7rem 1.25rem">CANCEL</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP: MAPPING -->
+    <div class="step" id="step-mapping">
+      <div class="wizard-title">Panel Mapping</div>
+      <div class="wizard-subtitle">CLICK THE PANEL THAT IS CURRENTLY LIT</div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar"><div class="progress-fill" id="prog-fill"></div></div>
+        <div class="progress-label" id="prog-label">0 OF 18 MAPPED</div>
+      </div>
+
+      <div class="mapping-layout">
+        <!-- 3x3 grid -->
+        <div class="panel-grid" id="panel-grid"></div>
+
+        <!-- Info sidebar -->
+        <div class="info-panel">
+          <div class="section-label">CURRENTLY LIT</div>
+          <div class="current-addr" id="cur-addr">0</div>
+          <div class="info-instruction" id="cur-instr">
+            Address <strong>0</strong> is now lit on your display.<br>
+            Click its position in the grid.
+          </div>
+          <div class="btn-stack">
+            <button class="btn-secondary" onclick="skipCurrent()">SKIP THIS ADDRESS</button>
+            <button class="btn-secondary" onclick="stopWizard()" style="margin-top:0.5rem">CANCEL WIZARD</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP: COMPLETE -->
+    <div class="step" id="step-complete">
+      <div class="complete-wrap">
+        <div class="complete-num" id="complete-num">18</div>
+        <div class="complete-label">PANELS MAPPED</div>
+        <p style="color:var(--mid);font-size:0.85rem;margin-bottom:2rem">
+          Review the mapping below, then save to apply it to the display.
+        </p>
+        <div class="mapping-summary" id="map-summary"></div>
+        <div style="display:flex;gap:1px;justify-content:center;margin-top:1rem">
+          <button class="btn-primary" onclick="saveMapping()">SAVE & APPLY LAYOUT →</button>
+          <button class="btn-secondary" onclick="restartWizard()">START OVER</button>
+        </div>
+        <div id="save-error" style="margin-top:1rem;font-family:var(--font-mono);font-size:0.7rem;color:var(--mid)"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="toasts"></div>
+
+  <script>
+    const API = "http://localhost:5000";
+    let currentAddr = 0;
+    let totalCtrl   = 18;
+    let mappings    = {};
+
+    // ── Init ──────────────────────────────────────────────────────
+    document.addEventListener("DOMContentLoaded", () => {
+      buildGrid();
+      checkStatus();
+    });
+
+    async function checkStatus() {
+      try {
+        const r = await fetch(`${API}/api/status`);
+        const d = await r.json();
+        const dot  = document.getElementById("status-dot");
+        const txt  = document.getElementById("status-text");
+        if (d.connected) {
+          dot.className  = "status-indicator online";
+          txt.textContent = "CONNECTED";
+        } else {
+          txt.textContent = "OFFLINE — connect first";
+        }
+      } catch {
+        document.getElementById("status-text").textContent = "SERVER OFFLINE";
+      }
+    }
+
+    // ── Build 3x3 grid ────────────────────────────────────────────
+    function buildGrid() {
+      const grid = document.getElementById("panel-grid");
+      grid.innerHTML = "";
+      for (let row = 1; row <= 3; row++) {
+        for (let col = 1; col <= 3; col++) {
+          const panel = document.createElement("div");
+          panel.className = "phys-panel";
+          ["top","bottom"].forEach(half => {
+            const div = document.createElement("div");
+            div.className = "panel-half";
+            div.id        = `h-${col}-${row}-${half}`;
+            div.innerHTML = `
+              <span class="half-pos">COL ${col} · ROW ${row}</span>
+              <span class="half-label">${half.toUpperCase()}</span>
+              <span class="half-addr" id="ha-${col}-${row}-${half}">—</span>
+              <span class="half-cta">SELECT →</span>
+            `;
+            div.addEventListener("click", () => assignPanel(col, row, half));
+            panel.appendChild(div);
+          });
+          grid.appendChild(panel);
+        }
+      }
+    }
+
+    // ── Wizard flow ───────────────────────────────────────────────
+    async function startWizard() {
+      const r = await fetch(`${API}/api/wizard/start`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({total: totalCtrl})
+      });
+      const d = await r.json();
+      if (d.success) {
+        currentAddr = d.current;
+        showStep("step-mapping");
+        updateInfo(d.current, 0, d.total);
+      } else {
+        toast("Failed to start wizard", "error");
+      }
+    }
+
+    async function assignPanel(col, row, half) {
+      const r = await fetch(`${API}/api/wizard/assign`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({address: currentAddr, col, row, half})
+      });
+      const d = await r.json();
+
+      // Mark cell
+      const cell = document.getElementById(`h-${col}-${row}-${half}`);
+      if (cell) {
+        cell.classList.add("mapped");
+        document.getElementById(`ha-${col}-${row}-${half}`).textContent = `ADDR ${currentAddr}`;
+      }
+      mappings[currentAddr] = {col, row, half};
+
+      if (d.complete) {
+        showStep("step-complete");
+        buildSummary();
+      } else {
+        currentAddr = d.next;
+        updateInfo(d.next, d.mapped, d.total);
+      }
+    }
+
+    async function skipCurrent() {
+      const r = await fetch(`${API}/api/wizard/skip`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({address: currentAddr})
+      });
+      const d = await r.json();
+      if (d.complete) {
+        showStep("step-complete");
+        buildSummary();
+      } else {
+        currentAddr = d.next;
+        updateInfo(d.next, Object.keys(mappings).length, totalCtrl);
+        toast(`Skipped address ${currentAddr - 1}`);
+      }
+    }
+
+    async function stopWizard() {
+      await fetch(`${API}/api/wizard/stop`, {method:"POST"});
+      mappings = {};
+      buildGrid();
+      showStep("step-intro");
+    }
+
+    async function saveMapping() {
+      const r = await fetch(`${API}/api/wizard/save`, {method:"POST"});
+      const d = await r.json();
+      if (d.success) {
+        toast("Layout saved — redirecting…");
+        setTimeout(() => window.location.href = "/", 1500);
+      } else {
+        document.getElementById("save-error").textContent = d.error || "Save failed";
+      }
+    }
+
+    function restartWizard() {
+      mappings = {};
+      buildGrid();
+      showStep("step-intro");
+    }
+
+    // ── UI helpers ────────────────────────────────────────────────
+    function updateInfo(addr, mapped, total) {
+      document.getElementById("cur-addr").textContent = addr;
+      document.getElementById("cur-instr").innerHTML  =
+        `Address <strong>${addr}</strong> is now lit on your display.<br>Click its position in the grid.`;
+      const pct = Math.round((mapped / total) * 100);
+      document.getElementById("prog-fill").style.width  = pct + "%";
+      document.getElementById("prog-label").textContent = `${mapped} OF ${total} MAPPED`;
+    }
+
+    function buildSummary() {
+      const container = document.getElementById("map-summary");
+      const num       = document.getElementById("complete-num");
+      num.textContent = Object.keys(mappings).length;
+      container.innerHTML = Object.entries(mappings)
+        .sort(([a],[b]) => parseInt(a) - parseInt(b))
+        .map(([addr, m]) => `
+          <div class="map-cell">
+            <span class="mc-addr">${addr}</span>
+            C${m.col}R${m.row}<br>${m.half.toUpperCase()}
+          </div>
+        `).join("");
+    }
+
+    function showStep(id) {
+      document.querySelectorAll(".step").forEach(s => s.classList.remove("active"));
+      document.getElementById(id).classList.add("active");
+    }
+
+    function toast(msg, type="ok") {
+      const c  = document.getElementById("toasts");
+      const el = document.createElement("div");
+      el.className   = "toast" + (type === "error" ? " error" : "");
+      el.textContent = msg;
+      c.appendChild(el);
+      setTimeout(() => el.remove(), 3000);
+    }
+  </script>
+</body>
+</html>
