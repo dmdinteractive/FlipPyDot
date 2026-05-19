@@ -84,11 +84,12 @@ def run_anim(fn, *args, **kwargs):
     _anim_stop.clear()
 
     def _run():
-        for frame, delay in fn(*args, **kwargs):
-            if _anim_stop.is_set():
-                break
-            display.send(frame)
-            time.sleep(delay)
+        while not _anim_stop.is_set():
+            for frame, delay in fn(*args, **kwargs):
+                if _anim_stop.is_set():
+                    break
+                display.send(frame)
+                time.sleep(delay)
 
     _anim_thread = threading.Thread(target=_run, daemon=True)
     _anim_thread.start()
