@@ -1,338 +1,373 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FLIPDOT CONSOLE V5.1</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>FLIPDOT CONSOLE V6</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&family=Orbitron:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
-  <link rel="stylesheet" href="css/console.css" />
+  <link rel="stylesheet" href="css/style.css"/>
 </head>
 <body>
 
-<header class="sysbar">
-  <div class="sysbar-left">
-    <span class="product-name">FLIPDOT</span>
-    <span class="product-ver">CONSOLE V5.1</span>
-    <span class="sysbar-sep">|</span>
-    <span class="sys-info" id="sys-dims">84×42</span>
-    <span class="sys-info" id="sys-panels">18 CTRL</span>
+<header class="header">
+  <div class="header-brand">
+    <span class="brand-name">FlipDot</span>
+    <span class="brand-ver">CONSOLE V6</span>
   </div>
-  <div class="sysbar-center">
-    <div class="tally-row">
-      <div class="tally" id="tally-conn"><div class="tally-dot"></div><span id="tally-conn-label">OFFLINE</span></div>
-      <div class="tally" id="tally-cue"><div class="tally-dot"></div><span id="tally-cue-label">IDLE</span></div>
-      <div class="tally" id="tally-sched"><div class="tally-dot"></div><span id="tally-sched-label">SCHED OFF</span></div>
+  <nav class="ws-switcher">
+    <button class="ws-btn active" data-ws="live">LIVE</button>
+    <button class="ws-btn" data-ws="program">PROGRAM</button>
+    <button class="ws-btn" data-ws="setup">SETUP</button>
+    <button class="ws-btn" data-ws="monitor">MONITOR</button>
+  </nav>
+  <div class="header-right">
+    <span class="header-clock" id="hdr-clock">00:00:00</span>
+    <div class="header-status">
+      <div class="status-dot" id="hdr-dot"></div>
+      <span id="hdr-status">OFFLINE</span>
     </div>
-  </div>
-  <div class="sysbar-right">
-    <span class="sys-clock" id="sys-clock">00:00:00</span>
-    <button class="sysbar-btn" onclick="toggleConnect()">CONNECT</button>
-    <a href="/wizard.html" class="sysbar-btn">PANEL WIZARD</a>
+    <button class="hdr-btn" onclick="toggleConnect()">CONNECT</button>
+    <a href="/wizard.html" class="hdr-btn">WIZARD</a>
   </div>
 </header>
 
-<div class="console-wrap">
+<div class="main">
 
-  <!-- LEFT: Monitors -->
-  <aside class="mon-column">
-    <div class="monitor-block">
-      <div class="mon-label tally-amber">PROGRAM</div>
-      <div class="mon-wrap"><canvas id="pgm-canvas"></canvas></div>
-      <div class="mon-meta">
-        <span id="pgm-cue-num">—</span>
-        <span id="pgm-cue-label">NO CUE</span>
-        <span id="pgm-fps" class="mon-fps">— fps</span>
+  <!-- LIVE -->
+  <div class="workspace active" id="ws-live">
+    <aside class="mon-col">
+      <div class="mon-block">
+        <div class="mon-tag pgm">PROGRAM</div>
+        <div class="mon-canvas-wrap"><canvas id="pgm-canvas"></canvas></div>
+        <div class="mon-meta"><span class="mon-cue-num" id="pgm-num">—</span><span id="pgm-label">NO CUE</span><span class="mon-fps" id="pgm-fps">— fps</span></div>
+      </div>
+      <div class="mon-block">
+        <div class="mon-tag">PREVIEW / NEXT</div>
+        <div class="mon-canvas-wrap pvw"><canvas id="pvw-canvas"></canvas></div>
+        <div class="mon-meta"><span class="mon-cue-num" id="pvw-num">—</span><span id="pvw-label">—</span></div>
+      </div>
+      <div class="qa-strip">
+        <button class="qa-btn" onclick="apiPost('/api/display/fill')">FILL</button>
+        <button class="qa-btn" onclick="apiPost('/api/display/clear')">CLEAR</button>
+        <button class="qa-btn" onclick="apiPost('/api/animations/stop')">STOP</button>
+      </div>
+      <div class="port-section">
+        <label class="field-label">SERIAL PORT</label>
+        <div class="port-row">
+          <select id="port-select" class="port-sel"></select>
+          <button class="icon-btn" onclick="scanPorts()">↻</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="live-main">
+      <div>
+        <div class="section-head">CUE LIST <span style="float:right;display:flex;gap:4px"><button class="btn btn-outline btn-sm" onclick="addCue()">+ CUE</button><button class="btn btn-outline btn-sm" onclick="apiPost('/api/cues/renumber')">RENUM</button></span></div>
+        <div style="overflow-y:auto;max-height:calc(100vh - 300px)">
+          <table class="cue-table">
+            <thead><tr><th class="col-num">CUE</th><th>LABEL</th><th>TYPE</th><th>CONTENT</th><th>WAIT</th><th>DUR</th><th>AUTO</th><th class="col-actions"></th></tr></thead>
+            <tbody id="cue-tbody"></tbody>
+          </table>
+          <div id="cue-empty" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim);padding:1rem;text-align:center">No cues — go to PROGRAM to add content</div>
+        </div>
+      </div>
+      <div class="cue-editor" id="cue-editor" style="display:none">
+        <div class="editor-title">EDIT CUE <span id="ed-cue-num"></span></div>
+        <div class="form-grid">
+          <div class="field-group"><label class="field-label">NUMBER</label><input type="number" id="ed-number" class="field-input" step="0.5"></div>
+          <div class="field-group" style="flex:2"><label class="field-label">LABEL</label><input type="text" id="ed-label" class="field-input"></div>
+          <div class="field-group"><label class="field-label">TYPE</label><select id="ed-type" class="field-select" onchange="updateEditorType()"><option value="clear">Clear</option><option value="fill">Fill</option><option value="text">Text</option><option value="animation">Animation</option></select></div>
+          <div class="field-group" id="ed-text-f" style="display:none;flex:3"><label class="field-label">TEXT — supports {time} {date} {temp}</label><input type="text" id="ed-text" class="field-input"></div>
+          <div class="field-group" id="ed-fsize-f" style="display:none"><label class="field-label">SIZE</label><input type="number" id="ed-fontsize" class="field-input" value="14"></div>
+          <div class="field-group" id="ed-scroll-f" style="display:none"><label class="field-label">MODE</label><select id="ed-scroll" class="field-select"><option value="false">Static</option><option value="true">Scroll</option></select></div>
+          <div class="field-group" id="ed-anim-f" style="display:none"><label class="field-label">ANIMATION</label><select id="ed-anim" class="field-select"></select></div>
+          <div class="field-group"><label class="field-label">PRE-WAIT (s)</label><input type="number" id="ed-prewait" class="field-input" value="0" min="0" step="0.5"></div>
+          <div class="field-group"><label class="field-label">DURATION (s, -1=hold)</label><input type="number" id="ed-duration" class="field-input" value="5" min="-1" step="0.5"></div>
+          <div class="field-group"><label class="field-label">FADE (s)</label><input type="number" id="ed-fade" class="field-input" value="0" step="0.1"></div>
+          <div class="field-group"><label class="field-label">AUTO FOLLOW</label><select id="ed-auto" class="field-select"><option value="false">Manual</option><option value="true">Auto</option></select></div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="saveCueEdit()">SAVE</button>
+          <button class="btn btn-outline" onclick="cancelCueEdit()">CANCEL</button>
+          <button class="btn btn-outline" onclick="fireCueDirect()">▶ FIRE NOW</button>
+          <button class="btn btn-outline btn-danger" onclick="deleteCue(editingCueId);cancelCueEdit()">DELETE</button>
+        </div>
       </div>
     </div>
-    <div class="monitor-block" style="margin-top:2px">
-      <div class="mon-label">PREVIEW / NEXT</div>
-      <div class="mon-wrap mon-wrap-prev"><canvas id="pvw-canvas"></canvas></div>
-      <div class="mon-meta">
-        <span id="pvw-cue-num">—</span>
-        <span id="pvw-cue-label">NO NEXT CUE</span>
-      </div>
-    </div>
-    <div class="qa-block">
-      <button class="qa-btn qa-fill"  onclick="apiPost('/api/display/fill')">FILL</button>
-      <button class="qa-btn qa-clear" onclick="apiPost('/api/display/clear')">CLEAR</button>
-      <button class="qa-btn"          onclick="apiPost('/api/animations/stop')">STOP</button>
-    </div>
-    <div class="port-block">
-      <div class="block-label">SERIAL PORT</div>
-      <div class="port-row">
-        <select id="port-select" class="port-select"></select>
-        <button class="icon-btn" onclick="scanPorts()">↻</button>
-      </div>
-    </div>
-  </aside>
 
-  <!-- RIGHT: Workspace -->
-  <main class="workspace">
-
-    <!-- Transport -->
     <div class="transport-bar">
-      <div class="transport-cue-info">
-        <span class="t-label">CUE</span>
-        <span class="t-cue-num" id="t-cur-num">—</span>
-        <span class="t-cue-name" id="t-cur-name">NO CUE ACTIVE</span>
+      <div class="t-cue-block">
+        <div class="t-cue-num" id="t-num">—</div>
+        <div class="t-cue-name" id="t-name">NO CUE ACTIVE</div>
       </div>
-      <div class="transport-timer">
-        <span class="t-label">ELAPSED</span>
+      <div class="t-timer-block">
+        <span class="t-timer-label">ELAPSED</span>
         <span class="t-timer" id="t-elapsed">0.0</span>
       </div>
-      <div class="transport-controls">
-        <button class="t-btn t-back"    onclick="wsBack()">◀◀ BACK</button>
-        <button class="t-btn t-go"      onclick="wsGo()">▶ GO</button>
-        <button class="t-btn t-hold"    onclick="wsHold()">⏸ HOLD</button>
-        <button class="t-btn t-release" onclick="wsRelease()">■ RELEASE</button>
+      <div class="t-btns">
+        <button class="t-btn" onclick="wsBack()">◀ BACK</button>
+        <button class="t-btn t-go" onclick="wsGo()">GO</button>
+        <button class="t-btn" onclick="wsHold()">HOLD</button>
+        <button class="t-btn" onclick="wsRelease()">RELEASE</button>
       </div>
-      <div class="transport-state">
-        <span class="t-label">STATE</span>
+      <div class="t-state-block">
+        <span class="t-state-label">STATE</span>
         <span class="t-state" id="t-state">IDLE</span>
       </div>
     </div>
+  </div>
 
-    <!-- Tabs -->
-    <nav class="ws-tabs">
-      <button class="ws-tab active" data-tab="cuelist">CUE LIST</button>
-      <button class="ws-tab" data-tab="scheduler">SCHEDULER</button>
-      <button class="ws-tab" data-tab="content">TEXT</button>
-      <button class="ws-tab" data-tab="image">IMAGE</button>
-      <button class="ws-tab" data-tab="pixel">PIXEL EDITOR</button>
-      <button class="ws-tab" data-tab="variables">VARIABLES</button>
-      <button class="ws-tab" data-tab="animations">ANIMATIONS</button>
-      <button class="ws-tab" data-tab="shows">SHOWS</button>
+  <!-- PROGRAM -->
+  <div class="workspace" id="ws-program">
+    <nav class="prog-tabs">
+      <button class="prog-tab active" data-ptab="text">TEXT</button>
+      <button class="prog-tab" data-ptab="image">IMAGE</button>
+      <button class="prog-tab" data-ptab="pixel">PIXEL EDITOR</button>
+      <button class="prog-tab" data-ptab="animations">ANIMATIONS</button>
+      <button class="prog-tab" data-ptab="playlist">PLAYLIST</button>
+      <button class="prog-tab" data-ptab="assets">ASSETS</button>
     </nav>
 
-    <!-- CUE LIST -->
-    <div class="ws-pane active" id="tab-cuelist">
-      <div class="pane-toolbar">
-        <button class="tb-btn" onclick="addCue()">+ ADD CUE</button>
-        <button class="tb-btn" onclick="apiPost('/api/cues/renumber')">RENUMBER</button>
-        <button class="tb-btn tb-dim" onclick="clearCueList()">CLEAR LIST</button>
+    <div class="prog-pane active" id="ptab-text">
+      <div class="prog-body">
+        <div class="section-head">SEND TEXT — supports {time} {date} {temp} {rss} tokens</div>
+        <textarea id="txt-msg" class="field-textarea" rows="3" placeholder="Hello {time} — temp is {temp} — {rss}"></textarea>
+        <div class="form-grid" style="margin-top:8px">
+          <div class="field-group"><label class="field-label">FONT SIZE</label><select id="txt-size" class="field-select"><option value="7">7px</option><option value="10">10px</option><option value="14" selected>14px</option><option value="21">21px</option><option value="28">28px</option></select></div>
+          <div class="field-group"><label class="field-label">X</label><input type="number" id="txt-x" class="field-input" value="0"></div>
+          <div class="field-group"><label class="field-label">Y</label><input type="number" id="txt-y" class="field-input" value="0"></div>
+          <div class="field-group"><label class="field-label">MODE</label><select id="txt-scroll" class="field-select"><option value="false">Static</option><option value="true">Scroll</option></select></div>
+        </div>
+        <div id="txt-preview" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim);min-height:18px;margin-top:4px"></div>
+        <div class="btn-row"><button class="btn btn-primary" onclick="sendText()">SEND →</button><button class="btn btn-outline" onclick="previewVarText()">PREVIEW VARIABLES</button></div>
       </div>
-      <div class="cue-table-wrap">
-        <table class="cue-table">
-          <thead><tr>
-            <th class="col-num">CUE</th><th class="col-label">LABEL</th>
-            <th class="col-type">TYPE</th><th class="col-content">CONTENT</th>
-            <th class="col-wait">PRE-WAIT</th><th class="col-dur">DURATION</th>
-            <th class="col-fade">FADE</th><th class="col-follow">AUTO</th>
-            <th class="col-actions"></th>
-          </tr></thead>
-          <tbody id="cue-tbody"></tbody>
-        </table>
+    </div>
+
+    <div class="prog-pane" id="ptab-image">
+      <div class="prog-body" style="flex-direction:row;align-items:flex-start;flex-wrap:wrap;gap:1.5rem">
+        <div style="flex:1;min-width:260px">
+          <div class="section-head">IMPORT IMAGE / GIF</div>
+          <div class="field-group"><label class="field-label">FILE (PNG JPG GIF BMP)</label><input type="file" id="img-file" accept="image/*" class="field-input" style="padding:3px"></div>
+          <div class="form-grid" style="margin-top:8px">
+            <div class="field-group"><label class="field-label">THRESHOLD</label><div class="range-wrap"><input type="range" id="img-threshold" min="0" max="255" value="128"><span class="range-val" id="img-thr-v">128</span></div></div>
+            <div class="field-group"><label class="field-label">BRIGHTNESS</label><div class="range-wrap"><input type="range" id="img-brightness" min="0.1" max="3" step="0.1" value="1.0"><span class="range-val" id="img-br-v">1.0</span></div></div>
+            <div class="field-group"><label class="field-label">CONTRAST</label><div class="range-wrap"><input type="range" id="img-contrast" min="0.1" max="3" step="0.1" value="1.0"><span class="range-val" id="img-con-v">1.0</span></div></div>
+            <div class="field-group"><label class="field-label">DITHER</label><select id="img-dither" class="field-select"><option value="none">None</option><option value="floyd">Floyd-Steinberg</option><option value="bayer">Bayer</option></select></div>
+            <div class="field-group"><label class="field-label">SCALE</label><select id="img-scale" class="field-select"><option value="fit">Fit</option><option value="fill">Fill</option><option value="stretch">Stretch</option></select></div>
+            <div class="field-group"><label class="field-label"><input type="checkbox" id="img-invert"> INVERT</label></div>
+          </div>
+          <div class="btn-row"><button class="btn btn-primary" onclick="uploadImage()">PROCESS IMAGE</button></div>
+          <div id="img-info" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim);margin-top:6px"></div>
+          <div class="form-grid" style="margin-top:12px">
+            <div class="field-group"><label class="field-label">LOOP (0=∞)</label><input type="number" id="img-loop" class="field-input" value="1" min="0"></div>
+            <div class="field-group"><label class="field-label">CUE LABEL</label><input type="text" id="img-cue-label" class="field-input" placeholder="Image cue"></div>
+            <div class="field-group"><label class="field-label">CUE DURATION</label><input type="number" id="img-dur" class="field-input" value="10"></div>
+          </div>
+          <div class="btn-row">
+            <button class="btn btn-primary" onclick="sendImageToDisplay()">▶ SEND</button>
+            <button class="btn btn-outline" onclick="addImageToCue()">+ ADD TO CUES</button>
+          </div>
+        </div>
+        <div style="flex:1;min-width:260px">
+          <div class="section-head">PREVIEW</div>
+          <div style="border:1px solid var(--border-hi);display:inline-block;background:#0a0a0a;padding:4px"><canvas id="img-preview-canvas" style="width:336px"></canvas></div>
+        </div>
       </div>
-      <div class="empty-state" id="cue-empty">No cues — click ADD CUE to begin</div>
-      <div class="cue-editor" id="cue-editor" style="display:none">
-        <div class="editor-title">EDIT CUE <span id="ed-cue-num"></span></div>
-        <div class="editor-grid">
-          <div class="ed-field"><label class="ed-label">CUE NUMBER</label><input type="number" id="ed-number" class="ed-input" step="0.5" min="0.1"></div>
-          <div class="ed-field"><label class="ed-label">LABEL</label><input type="text" id="ed-label" class="ed-input"></div>
-          <div class="ed-field"><label class="ed-label">CONTENT TYPE</label>
-            <select id="ed-type" class="ed-select" onchange="updateEditorType()">
-              <option value="clear">Clear</option><option value="fill">Fill</option>
-              <option value="text">Text</option><option value="animation">Animation</option>
+    </div>
+
+    <div class="prog-pane" id="ptab-pixel">
+      <div class="prog-body" style="flex-direction:row;align-items:flex-start;gap:1rem">
+        <div>
+          <div class="pe-tools">
+            <button class="pe-tool active" data-tool="pencil" onclick="peSetTool('pencil')">✏ PENCIL</button>
+            <button class="pe-tool" data-tool="eraser" onclick="peSetTool('eraser')">◻ ERASER</button>
+            <button class="pe-tool" data-tool="fill" onclick="peSetTool('fill')">◼ FILL</button>
+            <button class="pe-tool" onclick="peClear()">CLEAR</button>
+            <button class="pe-tool" onclick="peFillAll()">FILL ALL</button>
+            <button class="pe-tool" onclick="peInvert()">INVERT</button>
+            <button class="pe-tool" onclick="peSyncFromDisplay()">↓ COPY DISPLAY</button>
+            <button class="pe-tool" style="background:var(--text);color:var(--bg)" onclick="pePush()">▶ PUSH</button>
+          </div>
+          <div style="border:1px solid var(--border-hi);background:#0a0a0a;padding:4px;display:inline-block"><canvas id="pe-canvas"></canvas></div>
+        </div>
+        <div style="min-width:160px">
+          <div class="section-head">ADD TO CUES</div>
+          <div class="field-group"><label class="field-label">LABEL</label><input type="text" id="pe-cue-label" class="field-input" placeholder="Pixel cue"></div>
+          <div class="field-group"><label class="field-label">DURATION (s)</label><input type="number" id="pe-dur" class="field-input" value="5"></div>
+          <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="peAddToCue()">+ ADD TO CUES</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="prog-pane" id="ptab-animations">
+      <div class="prog-body" style="flex-direction:row;gap:1.5rem">
+        <div style="flex:1" id="anim-container"></div>
+        <div style="width:200px">
+          <div class="section-head">PARAMETERS</div>
+          <div id="anim-params"><div style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim)">← Select animation</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="prog-pane" id="ptab-playlist">
+      <div class="prog-body">
+        <div class="section-head">PLAYLIST — SEQUENTIAL / SHUFFLE / WEIGHTED RANDOM</div>
+        <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
+          <select id="pl-mode" class="field-select" style="width:auto"><option value="sequential">Sequential</option><option value="shuffle">Shuffle</option><option value="weighted">Weighted Random</option></select>
+          <button class="btn btn-primary btn-sm" onclick="startPlaylist()">▶ START</button>
+          <button class="btn btn-outline btn-sm" onclick="apiPost('/api/playlist/stop').then(loadPlaylist)">⏹ STOP</button>
+          <button class="btn btn-outline btn-sm" onclick="apiPost('/api/playlist/skip')">⏭ SKIP</button>
+        </div>
+        <div style="border:1px solid var(--border);padding:0.75rem;margin-bottom:1rem">
+          <div class="form-grid">
+            <div class="field-group" style="flex:2"><label class="field-label">LABEL</label><input type="text" id="pl-label" class="field-input" placeholder="Item label"></div>
+            <div class="field-group"><label class="field-label">TYPE</label><select id="pl-type" class="field-select"><option value="text">Text</option><option value="animation">Animation</option><option value="clear">Clear</option><option value="fill">Fill</option></select></div>
+            <div class="field-group" style="flex:2"><label class="field-label">CONTENT</label><input type="text" id="pl-content" class="field-input" placeholder="Message or animation id"></div>
+            <div class="field-group"><label class="field-label">DURATION (s)</label><input type="number" id="pl-dur" class="field-input" value="5" min="1"></div>
+            <div class="field-group"><label class="field-label">WEIGHT</label><input type="number" id="pl-weight" class="field-input" value="1.0" min="0.1" step="0.1"></div>
+          </div>
+          <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="addPlaylistItem()">+ ADD ITEM</button></div>
+        </div>
+        <div id="pl-list" style="border:1px solid var(--border)"><div style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim);padding:1rem;text-align:center">Playlist empty</div></div>
+      </div>
+    </div>
+
+    <div class="prog-pane" id="ptab-assets">
+      <div class="prog-body">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
+          <div class="section-head" style="border:none;margin:0">ASSET LIBRARY</div>
+          <div style="display:flex;gap:6px">
+            <input type="text" id="asset-search" class="field-input" style="width:160px" placeholder="Search…" oninput="searchAssets()">
+            <select id="asset-type-filter" class="field-select" style="width:auto" onchange="loadAssets()">
+              <option value="">All types</option><option value="text_preset">Text</option><option value="image">Image</option><option value="animation">Animation</option>
             </select>
           </div>
-          <div class="ed-field" id="ed-text-field" style="display:none"><label class="ed-label">TEXT</label><input type="text" id="ed-text" class="ed-input" placeholder="Supports {time} {date} {temp}…"></div>
-          <div class="ed-field" id="ed-fontsize-field" style="display:none"><label class="ed-label">FONT SIZE</label><input type="number" id="ed-fontsize" class="ed-input" value="14" min="7" max="42"></div>
-          <div class="ed-field" id="ed-scroll-field" style="display:none"><label class="ed-label">SCROLL</label><select id="ed-scroll" class="ed-select"><option value="false">Static</option><option value="true">Scroll</option></select></div>
-          <div class="ed-field" id="ed-anim-field" style="display:none"><label class="ed-label">ANIMATION</label><select id="ed-anim" class="ed-select"></select></div>
-          <div class="ed-field"><label class="ed-label">PRE-WAIT (s)</label><input type="number" id="ed-prewait" class="ed-input" value="0" min="0" step="0.5"></div>
-          <div class="ed-field"><label class="ed-label">DURATION (s, -1=hold)</label><input type="number" id="ed-duration" class="ed-input" value="5" min="-1" step="0.5"></div>
-          <div class="ed-field"><label class="ed-label">FADE IN (s)</label><input type="number" id="ed-fade" class="ed-input" value="0" min="0" step="0.1"></div>
-          <div class="ed-field"><label class="ed-label">AUTO FOLLOW</label><select id="ed-auto" class="ed-select"><option value="false">Manual</option><option value="true">Auto →</option></select></div>
         </div>
-        <div class="editor-actions">
-          <button class="tb-btn tb-primary" onclick="saveCueEdit()">SAVE CUE</button>
-          <button class="tb-btn" onclick="cancelCueEdit()">CANCEL</button>
-          <button class="tb-btn" onclick="fireJump(editingCueId)">▶ FIRE NOW</button>
+        <div id="asset-grid" class="asset-grid"></div>
+        <div class="btn-row" style="margin-top:1rem">
+          <button class="btn btn-outline btn-sm" onclick="saveCurrentAsAsset()">SAVE CURRENT DISPLAY AS ASSET</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- SCHEDULER -->
-    <div class="ws-pane" id="tab-scheduler">
-      <div class="pane-toolbar">
-        <button class="tb-btn tb-primary" id="sched-toggle" onclick="toggleScheduler()">▶ START SCHEDULER</button>
-        <button class="tb-btn" onclick="addScheduleItem()">+ ADD ITEM</button>
+  <!-- SETUP -->
+  <div class="workspace" id="ws-setup">
+    <div class="setup-card">
+      <div class="setup-card-title">SERIAL CONNECTION</div>
+      <div class="field-group"><label class="field-label">PORT</label><select id="setup-port" class="field-select"></select></div>
+      <div class="btn-row"><button class="btn btn-primary btn-sm" onclick="toggleConnect()">CONNECT / DISCONNECT</button><button class="btn btn-outline btn-sm" onclick="scanPortsSetup()">↻ SCAN</button></div>
+    </div>
+
+    <div class="setup-card" style="flex:2">
+      <div class="setup-card-title">VARIABLES — WEATHER &amp; RSS</div>
+      <div class="form-grid">
+        <div class="field-group" style="flex:2"><label class="field-label">OPENWEATHERMAP API KEY</label><input type="text" id="var-api-key" class="field-input" placeholder="Free at openweathermap.org"></div>
+        <div class="field-group"><label class="field-label">CITY</label><input type="text" id="var-city" class="field-input" placeholder="San Francisco"></div>
+        <div class="field-group"><label class="field-label">UNITS</label><select id="var-units" class="field-select"><option value="imperial">°F</option><option value="metric">°C</option></select></div>
+        <div class="field-group" style="flex:2"><label class="field-label">RSS URL</label><input type="text" id="var-rss-url" class="field-input" placeholder="https://feeds.bbci.co.uk/news/rss.xml"></div>
+        <div class="field-group"><label class="field-label">UPDATE INTERVAL (s)</label><input type="number" id="var-update" class="field-input" value="300"></div>
       </div>
-      <div class="sched-form" id="sched-form">
-        <div class="editor-grid">
-          <div class="ed-field"><label class="ed-label">LABEL</label><input type="text" id="sf-label" class="ed-input" placeholder="Item name"></div>
-          <div class="ed-field"><label class="ed-label">MODE</label><select id="sf-mode" class="ed-select" onchange="updateSchedMode()"><option value="repeat">Repeat</option><option value="once">Once</option><option value="weekly">Weekly</option></select></div>
-          <div class="ed-field"><label class="ed-label">CONTENT TYPE</label><select id="sf-ctype" class="ed-select"><option value="text">Text</option><option value="animation">Animation</option><option value="clear">Clear</option><option value="fill">Fill</option></select></div>
-          <div class="ed-field" id="sf-text-wrap"><label class="ed-label">TEXT / ANIMATION ID</label><input type="text" id="sf-content" class="ed-input" placeholder="e.g. HELLO or rain"></div>
-          <div class="ed-field"><label class="ed-label">DURATION (s)</label><input type="number" id="sf-dur" class="ed-input" value="5" min="1"></div>
-          <div class="ed-field" id="sf-interval-wrap"><label class="ed-label">INTERVAL (s)</label><input type="number" id="sf-interval" class="ed-input" value="60" min="1"></div>
-          <div class="ed-field" id="sf-time-wrap" style="display:none"><label class="ed-label">START TIME</label><input type="datetime-local" id="sf-start" class="ed-input"></div>
-          <div class="ed-field" id="sf-days-wrap" style="display:none"><label class="ed-label">DAYS</label><div class="day-btns" id="day-btns"><button class="day-btn" data-day="0">MON</button><button class="day-btn" data-day="1">TUE</button><button class="day-btn" data-day="2">WED</button><button class="day-btn" data-day="3">THU</button><button class="day-btn" data-day="4">FRI</button><button class="day-btn" data-day="5">SAT</button><button class="day-btn" data-day="6">SUN</button></div></div>
-          <div class="ed-field"><label class="ed-label">PRIORITY</label><input type="number" id="sf-priority" class="ed-input" value="0" min="0" max="10"></div>
-        </div>
-        <div class="editor-actions"><button class="tb-btn tb-primary" onclick="submitScheduleItem()">+ ADD TO SCHEDULER</button></div>
-      </div>
-      <div class="sched-list-wrap">
-        <table class="cue-table"><thead><tr><th>LABEL</th><th>MODE</th><th>TYPE</th><th>CONTENT</th><th>DUR</th><th>INTERVAL</th><th>PRI</th><th>LAST RUN</th><th>EN</th><th></th></tr></thead><tbody id="sched-tbody"></tbody></table>
-        <div class="empty-state" id="sched-empty">No scheduled items</div>
+      <div class="btn-row"><button class="btn btn-primary btn-sm" onclick="saveVariablesConfig()">SAVE</button><button class="btn btn-outline btn-sm" onclick="refreshVariables()">↻ REFRESH</button></div>
+      <div style="margin-top:1rem">
+        <div class="field-group"><label class="field-label">TEST SUBSTITUTION</label><input type="text" id="var-test" class="field-input" placeholder="Time: {time}  Temp: {temp}"></div>
+        <div id="var-test-out" style="font-family:var(--f-mono);font-size:0.7rem;color:var(--text-mid);padding:4px 0;min-height:18px"></div>
+        <button class="btn btn-outline btn-sm" onclick="previewVarSetup()">PREVIEW</button>
       </div>
     </div>
 
-    <!-- TEXT -->
-    <div class="ws-pane" id="tab-content">
-      <div class="content-grid">
-        <div class="content-panel">
-          <div class="block-label">SEND TEXT — supports {time} {date} {temp} {rss} tokens</div>
-          <label class="ed-label">MESSAGE</label>
-          <textarea id="txt-msg" class="ed-textarea" rows="3" placeholder="Hello {time} — temp is {temp}"></textarea>
-          <div class="editor-grid" style="margin-top:8px">
-            <div class="ed-field"><label class="ed-label">FONT SIZE</label><select id="txt-size" class="ed-select"><option value="7">7px</option><option value="10">10px</option><option value="14" selected>14px</option><option value="21">21px</option><option value="28">28px</option></select></div>
-            <div class="ed-field"><label class="ed-label">X</label><input type="number" id="txt-x" class="ed-input" value="0" min="0" max="83"></div>
-            <div class="ed-field"><label class="ed-label">Y</label><input type="number" id="txt-y" class="ed-input" value="0" min="0" max="41"></div>
-            <div class="ed-field"><label class="ed-label">MODE</label><select id="txt-scroll" class="ed-select"><option value="false">Static</option><option value="true">Scroll</option></select></div>
-          </div>
-          <div class="ed-field" style="margin-top:8px"><label class="ed-label">PREVIEW (after variable substitution)</label><div id="txt-preview" style="font-family:var(--f-mono);font-size:0.7rem;color:var(--amber);padding:4px 0;min-height:20px"></div></div>
-          <div class="editor-actions"><button class="tb-btn tb-primary" onclick="sendText()">SEND →</button></div>
-        </div>
+    <div class="setup-card">
+      <div class="setup-card-title">EFFECTS ENGINE</div>
+      <div class="form-grid">
+        <div class="field-group"><label class="field-label">EFFECT</label><select id="fx-type" class="field-select" onchange="updateFxParams()"><option value="flicker">Flicker</option><option value="pulse">Pulse</option><option value="chase">Chase</option><option value="scanline">Scanline</option><option value="noise">Noise</option></select></div>
+        <div class="field-group"><label class="field-label">NAME</label><input type="text" id="fx-name" class="field-input" value="fx1"></div>
       </div>
+      <div id="fx-params" style="margin-top:8px"></div>
+      <div class="btn-row"><button class="btn btn-primary btn-sm" onclick="addEffect()">+ ADD</button><button class="btn btn-outline btn-sm btn-danger" onclick="apiPost('/api/effects/clear')">CLEAR ALL</button></div>
+      <div id="fx-list" style="margin-top:0.75rem"></div>
     </div>
 
-    <!-- IMAGE -->
-    <div class="ws-pane" id="tab-image">
-      <div class="content-grid" style="padding:0.75rem;display:flex;gap:8px;overflow-y:auto">
-        <div class="content-panel" style="flex:1">
-          <div class="block-label">IMPORT IMAGE / GIF</div>
-          <label class="ed-label">FILE (PNG, JPG, GIF, BMP)</label>
-          <input type="file" id="img-file" accept="image/*" class="ed-input" style="padding:3px">
-          <div class="editor-grid" style="margin-top:8px">
-            <div class="ed-field"><label class="ed-label">THRESHOLD (0-255)</label><input type="range" id="img-threshold" min="0" max="255" value="128" class="param-range" style="width:100%"><span id="img-thr-val" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text)">128</span></div>
-            <div class="ed-field"><label class="ed-label">BRIGHTNESS</label><input type="range" id="img-brightness" min="0.1" max="3.0" step="0.1" value="1.0" class="param-range"><span id="img-br-val" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text)">1.0</span></div>
-            <div class="ed-field"><label class="ed-label">CONTRAST</label><input type="range" id="img-contrast" min="0.1" max="3.0" step="0.1" value="1.0" class="param-range"><span id="img-con-val" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text)">1.0</span></div>
-            <div class="ed-field"><label class="ed-label">DITHER</label><select id="img-dither" class="ed-select"><option value="none">None</option><option value="floyd">Floyd-Steinberg</option><option value="bayer">Bayer</option></select></div>
-            <div class="ed-field"><label class="ed-label">SCALE</label><select id="img-scale" class="ed-select"><option value="fit">Fit (letterbox)</option><option value="fill">Fill (crop)</option><option value="stretch">Stretch</option></select></div>
-            <div class="ed-field"><label class="ed-label"><input type="checkbox" id="img-invert"> INVERT</label></div>
-          </div>
-          <div class="editor-actions">
-            <button class="tb-btn tb-primary" onclick="uploadImage()">PROCESS IMAGE</button>
-          </div>
-          <div id="img-info" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim);margin-top:8px"></div>
-          <div class="editor-grid" style="margin-top:12px">
-            <div class="ed-field"><label class="ed-label">LOOP COUNT (0=∞)</label><input type="number" id="img-loop" class="ed-input" value="1" min="0"></div>
-            <div class="ed-field"><label class="ed-label">CUE LABEL</label><input type="text" id="img-cue-label" class="ed-input" placeholder="Image cue"></div>
-            <div class="ed-field"><label class="ed-label">CUE DURATION (s)</label><input type="number" id="img-dur" class="ed-input" value="10" min="1"></div>
-          </div>
-          <div class="editor-actions">
-            <button class="tb-btn tb-primary" onclick="sendImageToDisplay()">▶ SEND TO DISPLAY</button>
-            <button class="tb-btn" onclick="addImageToCue()">+ ADD TO CUE LIST</button>
-          </div>
-        </div>
-        <div style="flex:1">
-          <div class="block-label">PREVIEW</div>
-          <div style="border:1px solid var(--border);background:#080808;padding:4px;display:inline-block">
-            <canvas id="img-preview-canvas" style="display:block;image-rendering:pixelated;width:336px"></canvas>
-          </div>
-        </div>
-      </div>
+    <div class="setup-card">
+      <div class="setup-card-title">SHOW FILES</div>
+      <div class="field-group"><label class="field-label">SHOW NAME</label><input type="text" id="show-name" class="field-input" placeholder="my_show"></div>
+      <div class="btn-row"><button class="btn btn-primary btn-sm" onclick="saveShow()">SAVE</button><button class="btn btn-outline btn-sm" onclick="loadShowsList()">↻ REFRESH</button></div>
+      <div id="shows-list" style="margin-top:0.75rem;display:flex;flex-direction:column;gap:var(--gap)"></div>
     </div>
 
-    <!-- PIXEL EDITOR -->
-    <div class="ws-pane" id="tab-pixel">
-      <div class="pane-toolbar">
-        <button class="pe-tool tb-btn active" data-tool="pencil" onclick="peSetTool('pencil')">✏ PENCIL</button>
-        <button class="pe-tool tb-btn" data-tool="eraser" onclick="peSetTool('eraser')">◻ ERASER</button>
-        <button class="pe-tool tb-btn" data-tool="fill" onclick="peSetTool('fill')">◼ FILL</button>
-        <span class="tb-sep">|</span>
-        <button class="tb-btn" onclick="peClear()">CLEAR</button>
-        <button class="tb-btn" onclick="peFillAll()">FILL ALL</button>
-        <button class="tb-btn" onclick="peInvert()">INVERT</button>
-        <button class="tb-btn" onclick="peSyncFromDisplay()">↓ COPY FROM DISPLAY</button>
-        <span class="tb-sep">|</span>
-        <button class="tb-btn tb-primary" onclick="pePush()">▶ PUSH TO DISPLAY</button>
+    <div class="setup-card" style="flex:2">
+      <div class="setup-card-title">SCHEDULER
+        <button class="btn btn-outline btn-sm" id="sched-toggle-btn" onclick="toggleScheduler()" style="margin-left:8px">▶ START</button>
       </div>
-      <div style="padding:0.75rem;display:flex;gap:12px;align-items:flex-start;overflow:auto;flex:1">
-        <div style="border:1px solid var(--border);background:#080808;padding:4px;flex-shrink:0">
-          <canvas id="pe-canvas" style="display:block;image-rendering:pixelated;cursor:crosshair"></canvas>
-        </div>
-        <div style="min-width:180px">
-          <div class="block-label">ADD TO CUE LIST</div>
-          <div class="ed-field"><label class="ed-label">CUE LABEL</label><input type="text" id="pe-cue-label" class="ed-input" placeholder="Pixel art cue"></div>
-          <div class="ed-field"><label class="ed-label">DURATION (s)</label><input type="number" id="pe-dur" class="ed-input" value="5" min="1"></div>
-          <div class="editor-actions"><button class="tb-btn" onclick="peAddToCue()">+ ADD TO CUES</button></div>
-        </div>
+      <div class="form-grid">
+        <div class="field-group"><label class="field-label">LABEL</label><input type="text" id="sf-label" class="field-input"></div>
+        <div class="field-group"><label class="field-label">MODE</label><select id="sf-mode" class="field-select" onchange="updateSchedMode()"><option value="repeat">Repeat</option><option value="once">Once</option><option value="weekly">Weekly</option></select></div>
+        <div class="field-group"><label class="field-label">TYPE</label><select id="sf-ctype" class="field-select"><option value="text">Text</option><option value="animation">Animation</option><option value="clear">Clear</option></select></div>
+        <div class="field-group" style="flex:2"><label class="field-label">CONTENT</label><input type="text" id="sf-content" class="field-input" placeholder="Message or animation id"></div>
+        <div class="field-group"><label class="field-label">DURATION (s)</label><input type="number" id="sf-dur" class="field-input" value="5"></div>
+        <div class="field-group" id="sf-int-wrap"><label class="field-label">INTERVAL (s)</label><input type="number" id="sf-interval" class="field-input" value="60"></div>
       </div>
+      <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="submitScheduleItem()">+ ADD</button></div>
+      <div id="sched-list" style="margin-top:0.75rem"></div>
     </div>
 
-    <!-- VARIABLES -->
-    <div class="ws-pane" id="tab-variables">
-      <div style="display:flex;gap:8px;padding:0.75rem;overflow-y:auto;height:100%">
-        <div class="content-panel" style="flex:1">
-          <div class="block-label">WEATHER & RSS CONFIGURATION</div>
-          <div class="editor-grid">
-            <div class="ed-field" style="flex:2"><label class="ed-label">OPENWEATHERMAP API KEY</label><input type="text" id="var-api-key" class="ed-input" placeholder="Get free key at openweathermap.org"></div>
-            <div class="ed-field"><label class="ed-label">CITY</label><input type="text" id="var-city" class="ed-input" placeholder="San Francisco"></div>
-            <div class="ed-field"><label class="ed-label">UNITS</label><select id="var-units" class="ed-select"><option value="imperial">Fahrenheit (°F)</option><option value="metric">Celsius (°C)</option></select></div>
-            <div class="ed-field" style="flex:2"><label class="ed-label">RSS FEED URL</label><input type="text" id="var-rss-url" class="ed-input" placeholder="https://feeds.bbci.co.uk/news/rss.xml"></div>
-            <div class="ed-field"><label class="ed-label">UPDATE INTERVAL (s)</label><input type="number" id="var-update" class="ed-input" value="300" min="30"></div>
-          </div>
-          <div class="editor-actions">
-            <button class="tb-btn tb-primary" onclick="saveVariablesConfig()">SAVE CONFIG</button>
-            <button class="tb-btn" onclick="refreshVariables()">↻ REFRESH NOW</button>
-          </div>
-          <div style="margin-top:1rem">
-            <div class="block-label">TEST VARIABLE SUBSTITUTION</div>
-            <div class="ed-field"><label class="ed-label">INPUT TEXT</label><input type="text" id="var-test-text" class="ed-input" placeholder="Time: {time}  Temp: {temp}  {rss}"></div>
-            <div class="ed-field"><label class="ed-label">OUTPUT</label><div id="var-test-out" style="font-family:var(--f-mono);font-size:0.75rem;color:var(--amber);padding:4px 0;min-height:20px"></div></div>
-            <div class="editor-actions"><button class="tb-btn" onclick="previewVarText()">PREVIEW</button></div>
-          </div>
+    <div class="setup-card">
+      <div class="setup-card-title">WEBHOOK TRIGGERS</div>
+      <div style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-dim);line-height:2.2">
+        <div>POST /api/webhook/<em style="color:var(--text)">{cue-label}</em></div>
+        <div>POST /api/webhook/<em style="color:var(--text)">go</em></div>
+        <div>POST /api/webhook/<em style="color:var(--text)">clear</em></div>
+        <div>POST /api/webhook/<em style="color:var(--text)">fill</em></div>
+      </div>
+      <div id="webhook-cues" style="margin-top:0.75rem;font-family:var(--f-mono);font-size:0.6rem;color:var(--text-dim)"></div>
+    </div>
+  </div>
+
+  <!-- MONITOR -->
+  <div class="workspace" id="ws-monitor">
+    <div style="padding:1.5rem;display:flex;flex-direction:column;gap:1rem;overflow-y:auto;flex:1">
+      <div>
+        <div class="section-head">PANEL HEALTH — 3×3 GRID (18 CONTROLLERS)</div>
+        <div class="monitor-grid" id="panel-health-grid"></div>
+      </div>
+      <div style="display:flex;gap:1rem;flex-wrap:wrap">
+        <div style="border:1px solid var(--border);padding:0.75rem;flex:1;min-width:200px">
+          <div class="section-head">SYSTEM</div>
+          <div id="mon-stats" style="font-family:var(--f-mono);font-size:0.65rem;color:var(--text-mid);line-height:2.2"></div>
         </div>
-        <div style="flex:1;min-width:200px">
-          <div class="block-label">LIVE VALUES</div>
+        <div style="border:1px solid var(--border);padding:0.75rem;flex:1;min-width:200px">
+          <div class="section-head">LIVE VARIABLE VALUES</div>
           <div id="var-grid" class="var-grid"></div>
-          <button class="tb-btn" onclick="refreshVariables()" style="margin-top:8px">↻ REFRESH</button>
+        </div>
+      </div>
+      <div>
+        <div class="section-head">LOG</div>
+        <div id="log-box" class="log-box"></div>
+      </div>
+      <div>
+        <div class="section-head">TEST TOOLS</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="apiPost('/api/display/fill')">FILL ALL</button>
+          <button class="btn btn-outline btn-sm" onclick="apiPost('/api/display/clear')">CLEAR ALL</button>
+          <button class="btn btn-outline btn-sm" onclick="apiPost('/api/animations/run',{name:'flash',options:{times:3}})">FLASH TEST</button>
+          <button class="btn btn-outline btn-sm" onclick="apiPost('/api/animations/run',{name:'checkerboard'})">CHECKERBOARD</button>
+          <button class="btn btn-outline btn-sm" onclick="refreshMonitor()">↻ REFRESH</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- ANIMATIONS -->
-    <div class="ws-pane" id="tab-animations">
-      <div class="anim-console">
-        <div class="anim-list-col" id="anim-container"></div>
-        <div class="anim-params-col">
-          <div class="block-label">PARAMETERS</div>
-          <div id="anim-params"><div class="empty-state">← Select animation</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- SHOWS -->
-    <div class="ws-pane" id="tab-shows">
-      <div class="shows-layout">
-        <div class="shows-save">
-          <div class="block-label">SAVE SHOW</div>
-          <div class="ed-field"><label class="ed-label">SHOW NAME</label><input type="text" id="show-name" class="ed-input" placeholder="my_show"></div>
-          <button class="tb-btn tb-primary" onclick="saveShow()">SAVE SHOW FILE</button>
-        </div>
-        <div class="shows-list">
-          <div class="block-label">SAVED SHOWS</div>
-          <div id="shows-list-wrap" class="shows-list-inner"><div class="empty-state">No saved shows</div></div>
-          <button class="tb-btn" onclick="loadShowsList()" style="margin-top:8px">↻ REFRESH</button>
-        </div>
-      </div>
-    </div>
-
-  </main>
 </div>
 
 <footer class="statusbar">
-  <span class="sb-item" id="sb-conn">SERIAL: OFFLINE</span>
+  <span id="sb-conn">SERIAL: OFFLINE</span>
   <span class="sb-sep">|</span>
-  <span class="sb-item" id="sb-cue">CUE ENGINE: IDLE</span>
+  <span id="sb-cue">CUE: IDLE</span>
   <span class="sb-sep">|</span>
-  <span class="sb-item" id="sb-sched">SCHEDULER: OFF</span>
+  <span id="sb-sched">SCHED: OFF</span>
   <span class="sb-sep">|</span>
-  <span class="sb-item" id="sb-anim">WS: CONNECTING</span>
+  <span id="sb-pl">PLAYLIST: OFF</span>
   <span class="sb-right" id="sb-time"></span>
 </footer>
 
@@ -340,13 +375,11 @@
 
 <script src="js/preview.js"></script>
 <script src="js/animations_ui.js"></script>
-<script src="js/console.js"></script>
+<script src="js/app.js"></script>
 <script>
-// Wire up image slider labels
-["img-threshold","img-brightness","img-contrast"].forEach(id => {
-  const el = document.getElementById(id);
-  const valId = id==="img-threshold"?"img-thr-val":id==="img-brightness"?"img-br-val":"img-con-val";
-  if (el) el.addEventListener("input", () => { const v=document.getElementById(valId); if(v) v.textContent=el.value; });
+[["img-threshold","img-thr-v"],["img-brightness","img-br-v"],["img-contrast","img-con-v"]].forEach(([id,vid])=>{
+  const el=document.getElementById(id);
+  if(el) el.addEventListener("input",()=>{const v=document.getElementById(vid);if(v)v.textContent=parseFloat(el.value).toFixed(el.step==="0.1"?1:0);});
 });
 </script>
 </body>
