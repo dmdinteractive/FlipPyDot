@@ -1,0 +1,30 @@
+# overnight.fds
+# Unattended overnight show.
+# Runs on startup via: python3 flipdot.py --daemon --script overnight
+
+# Clear the display to start fresh
+clear
+wait 2
+
+# Opening ident
+text "EXPLORATORIUM" size=21
+wait 5
+
+# Hand off to the scheduler for the rest of the night
+# Scheduler handles time-based content automatically
+sched clear
+sched add label="Time" type=text content="{time}" interval=300 dur=8
+sched add label="Date" type=text content="{date}" interval=900 dur=8
+sched add label="Weather" type=text content="{temp}  {conditions}" interval=600 dur=10
+sched add label="News" type=scroll content="{rss}" interval=120 dur=15 size=14
+sched on
+
+# Build a weighted playlist for ambient content between scheduler items
+playlist clear
+playlist add label="Rain" type=animation content=rain dur=20 weight=3
+playlist add label="Starfield" type=animation content=starfield dur=15 weight=2
+playlist add label="Time check" type=text content="{time}" dur=6 weight=4
+playlist add label="Maze" type=animation content=maze dur=25 weight=1
+playlist add label="News scroll" type=scroll content="{rss}" dur=12 weight=3
+playlist mode weighted
+playlist start

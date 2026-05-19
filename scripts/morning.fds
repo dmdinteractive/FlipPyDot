@@ -1,0 +1,19 @@
+# morning.fds
+# Morning startup sequence
+
+clear
+wait 1
+
+scroll "Good morning — {date}" size=14
+wait 8
+
+text "{time}" size=28
+wait 5
+
+text "{temp}  {conditions}" size=14
+wait 5
+
+# Load the main daytime show
+cue load daytime
+sched on
+playlist start
