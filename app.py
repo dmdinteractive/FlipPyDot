@@ -79,8 +79,19 @@ _cur_anim    = None
 
 def run_anim(fn, *args, **kwargs):
     global _anim_thread, _cur_anim
+
+    # Signal the old thread to stop
     _anim_stop.set()
+
+    # Wait for it to actually finish — up to 500ms
+    if _anim_thread and _anim_thread.is_alive():
+        _anim_thread.join(timeout=0.5)
+
+    # Clear the display so no ghost frames remain
+    display.clear()
     time.sleep(0.05)
+
+    # Start the new animation
     _anim_stop.clear()
 
     def _run():
