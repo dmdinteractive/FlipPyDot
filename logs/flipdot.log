@@ -1,0 +1,129 @@
+2026-07-13 13:44:01,954 [INFO] ====================================================
+2026-07-13 13:44:01,954 [INFO]   FLIPDOT CONSOLE V8
+2026-07-13 13:44:01,955 [INFO] ====================================================
+2026-07-13 13:44:01,955 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:44:03,460 [INFO] Variables config updated: ['weather_api_key', 'weather_city', 'weather_units', 'rss_url', 'rss_max_items', 'update_interval']
+2026-07-13 13:44:03,461 [INFO] Variable system started
+2026-07-13 13:44:03,462 [INFO] Fonts: px5x7, px3x5, vector
+2026-07-13 13:44:03,464 [INFO] Open: http://localhost:5000
+2026-07-13 13:44:03,464 [INFO] ====================================================
+2026-07-13 13:44:11,923 [INFO] ====================================================
+2026-07-13 13:44:11,923 [INFO]   FLIPDOT CONSOLE V8
+2026-07-13 13:44:11,923 [INFO] ====================================================
+2026-07-13 13:44:11,923 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:44:13,428 [INFO] Variables config updated: ['weather_api_key', 'weather_city', 'weather_units', 'rss_url', 'rss_max_items', 'update_interval']
+2026-07-13 13:44:13,430 [INFO] Variable system started
+2026-07-13 13:44:13,431 [INFO] Fonts: px5x7, px3x5, vector
+2026-07-13 13:44:13,432 [INFO] Open: http://localhost:5000
+2026-07-13 13:44:13,433 [INFO] ====================================================
+2026-07-13 13:44:13,569 [WARNING] RSS fetch failed: <urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1081)>
+2026-07-13 13:44:15,377 [INFO] [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5055
+ * Running on http://10.21.22.247:5055
+2026-07-13 13:44:15,377 [INFO] [33mPress CTRL+C to quit[0m
+2026-07-13 13:44:15,814 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:15] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:44:21,930 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:44:31,940 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:44:41,142 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "GET /api/fonts HTTP/1.1" 200 -
+2026-07-13 13:44:41,162 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/preview HTTP/1.1" 200 -
+2026-07-13 13:44:41,192 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/preview HTTP/1.1" 200 -
+2026-07-13 13:44:41,194 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/sequencer/steps HTTP/1.1" 200 -
+2026-07-13 13:44:41,195 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/sequencer/steps HTTP/1.1" 200 -
+2026-07-13 13:44:41,196 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/sequencer/steps HTTP/1.1" 200 -
+2026-07-13 13:44:41,197 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "GET /api/sequencer HTTP/1.1" 200 -
+2026-07-13 13:44:41,198 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/sequencer/reorder HTTP/1.1" 200 -
+2026-07-13 13:44:41,199 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "GET /api/sequencer HTTP/1.1" 200 -
+2026-07-13 13:44:41,200 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/sequencer/overlays HTTP/1.1" 200 -
+2026-07-13 13:44:41,201 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "GET /api/sequencer HTTP/1.1" 200 -
+2026-07-13 13:44:41,202 [INFO] Sequencer started
+2026-07-13 13:44:41,202 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:41] "POST /api/sequencer/start HTTP/1.1" 200 -
+2026-07-13 13:44:41,946 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:44:43,217 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:43] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:44:45,225 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:45] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:44:45,226 [INFO] Sequencer stopped
+2026-07-13 13:44:45,227 [INFO] Sequencer loop exited
+2026-07-13 13:44:45,228 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:45] "POST /api/sequencer/stop HTTP/1.1" 200 -
+2026-07-13 13:44:45,233 [INFO] Show saved: /Users/aidankrempetz/Desktop/CMD Networking /FlipPyDot/shows/apitest.yaml
+2026-07-13 13:44:45,233 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:45] "POST /api/shows/save HTTP/1.1" 200 -
+2026-07-13 13:44:45,239 [INFO] 127.0.0.1 - - [13/Jul/2026 13:44:45] "GET /api/shows HTTP/1.1" 200 -
+2026-07-13 13:44:51,953 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:45:01,959 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:45:02,476 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:02] "GET /api/shows HTTP/1.1" 200 -
+2026-07-13 13:45:02,479 [INFO] Migrated V7 show 'old_v7': 3 steps, 1 overlays
+2026-07-13 13:45:02,479 [INFO] Show loaded: /Users/aidankrempetz/Desktop/CMD Networking /FlipPyDot/shows/old_v7.yaml
+2026-07-13 13:45:02,480 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:02] "POST /api/shows/load HTTP/1.1" 200 -
+2026-07-13 13:45:11,963 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:45:21,968 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:45:31,213 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET / HTTP/1.1" 200 -
+2026-07-13 13:45:31,223 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /js/core.js HTTP/1.1" 200 -
+2026-07-13 13:45:31,223 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /css/style.css HTTP/1.1" 200 -
+2026-07-13 13:45:31,225 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /js/sequencer.js HTTP/1.1" 200 -
+2026-07-13 13:45:31,226 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /js/editor.js HTTP/1.1" 200 -
+2026-07-13 13:45:31,227 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /js/app.js HTTP/1.1" 200 -
+2026-07-13 13:45:31,338 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/fonts HTTP/1.1" 200 -
+2026-07-13 13:45:31,339 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/animations HTTP/1.1" 200 -
+2026-07-13 13:45:31,339 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/variables/values HTTP/1.1" 200 -
+2026-07-13 13:45:31,343 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/variables HTTP/1.1" 200 -
+2026-07-13 13:45:31,343 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "POST /api/preview HTTP/1.1" 200 -
+2026-07-13 13:45:31,344 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/fonts HTTP/1.1" 200 -
+2026-07-13 13:45:31,344 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/sequencer HTTP/1.1" 200 -
+2026-07-13 13:45:31,347 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/ports HTTP/1.1" 200 -
+2026-07-13 13:45:31,397 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-07-13 13:45:31,398 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,400 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,402 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,402 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:45:31,404 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,407 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,408 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:45:31,409 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,410 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,412 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,413 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:45:31,414 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,415 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,417 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,418 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:45:31,419 [INFO] 127.0.0.1 - - [13/Jul/2026 13:45:31] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:45:31,970 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:45:41,973 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:45:51,978 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:46:01,984 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:46:06,573 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:06] "GET / HTTP/1.1" 200 -
+2026-07-13 13:46:07,095 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /css/style.css HTTP/1.1" 200 -
+2026-07-13 13:46:07,095 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /js/core.js HTTP/1.1" 200 -
+2026-07-13 13:46:07,097 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /js/sequencer.js HTTP/1.1" 200 -
+2026-07-13 13:46:07,098 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /js/app.js HTTP/1.1" 200 -
+2026-07-13 13:46:07,098 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /js/editor.js HTTP/1.1" 200 -
+2026-07-13 13:46:07,288 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/fonts HTTP/1.1" 200 -
+2026-07-13 13:46:07,289 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/animations HTTP/1.1" 200 -
+2026-07-13 13:46:07,289 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/variables/values HTTP/1.1" 200 -
+2026-07-13 13:46:07,294 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "POST /api/preview HTTP/1.1" 200 -
+2026-07-13 13:46:07,294 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/variables HTTP/1.1" 200 -
+2026-07-13 13:46:07,295 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/fonts HTTP/1.1" 200 -
+2026-07-13 13:46:07,296 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/sequencer HTTP/1.1" 200 -
+2026-07-13 13:46:07,297 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/ports HTTP/1.1" 200 -
+2026-07-13 13:46:07,436 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,439 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+2026-07-13 13:46:07,441 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,445 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,445 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:46:07,448 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,450 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,452 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:46:07,454 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,455 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,458 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,461 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:46:07,462 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,464 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,466 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,468 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/status HTTP/1.1" 200 -
+2026-07-13 13:46:07,469 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,470 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:07,472 [INFO] 127.0.0.1 - - [13/Jul/2026 13:46:07] "GET /api/buffer HTTP/1.1" 200 -
+2026-07-13 13:46:11,990 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:46:21,995 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:46:31,999 [WARNING] Connection failed: No module named 'flippydot'
+2026-07-13 13:46:42,004 [WARNING] Connection failed: No module named 'flippydot'

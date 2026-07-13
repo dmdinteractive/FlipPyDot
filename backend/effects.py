@@ -1,105 +1,133 @@
 """
-effects.py — Real-time effects engine.
-Runs continuously on top of the current display buffer.
+effects.py — Real-time effects, applied as a filter on the way to the panel.
 
-Effects:
-  flicker    — random dots invert at a given rate
-  pulse      — periodic full invert of buffer
-  chase      — single-dot line sweeping across display
-  scanline   — horizontal scanline moving top to bottom
-  noise      — random noise overlay at given density
+V7 ran effects on their own thread: read display.buffer, apply the effect,
+send the result back. That had two problems. It wrote to the serial port at
+the same time as the animation thread, and — worse — its own output landed in
+display.buffer and became the *input* to the next iteration, so a flicker
+would compound into noise and a pulse would invert an already-inverted frame.
+
+Now an effect is a pure function of (clean content frame, tick). The Player
+owns the clock and calls apply() on every frame just before it hits the wire,
+so effects always layer over the real content and never feed back on
+themselves.
 """
-import threading, time, random, numpy as np, logging
+
+import random
+import logging
+import threading
+
+import numpy as np
+
 log = logging.getLogger(__name__)
 
-class EffectsEngine:
-    def __init__(self, get_buf_fn, send_fn):
-        self._get_buf   = get_buf_fn   # returns current buffer np array
-        self._send      = send_fn      # sends a frame to display
-        self.active     = {}           # name -> config dict
-        self._thread    = None
-        self._running   = False
-        self._lock      = threading.Lock()
 
+class EffectsEngine:
+    def __init__(self):
+        self.active = {}                 # name -> {"type", "params", "frame"}
+        self._lock  = threading.Lock()
+
+    # ── stack management ──────────────────────────────────────────
     def add(self, name, effect_type, **params):
+        if effect_type not in EFFECTS_REGISTRY:
+            raise ValueError(f"Unknown effect: {effect_type}")
         with self._lock:
-            self.active[name] = {"type":effect_type,"params":params,"frame":0}
-        if not self._running: self._start()
+            self.active[name] = {"type": effect_type, "params": params, "frame": 0}
         log.info(f"Effect added: {name} [{effect_type}]")
 
     def remove(self, name):
         with self._lock:
             self.active.pop(name, None)
-        if not self.active: self._stop()
 
     def clear(self):
-        with self._lock: self.active.clear()
-        self._stop()
+        with self._lock:
+            self.active.clear()
+
+    @property
+    def any_active(self):
+        return bool(self.active)
 
     def get_status(self):
-        return {"running":self._running, "effects": dict(self.active)}
+        with self._lock:
+            return {"running": bool(self.active), "effects": dict(self.active)}
 
-    def _start(self):
-        self._running = True
-        self._thread  = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
+    # ── the filter ────────────────────────────────────────────────
+    def apply(self, frame):
+        """Layer every active effect over a clean content frame."""
+        with self._lock:
+            if not self.active:
+                return frame
+            stack = list(self.active.values())
 
-    def _stop(self):
-        self._running = False
+        out = frame.copy()
+        for cfg in stack:
+            try:
+                out = self._one(out, cfg)
+                cfg["frame"] += 1
+            except Exception as e:
+                log.warning(f"Effect {cfg.get('type')} failed: {e}")
+        return out
 
-    def _loop(self):
-        while self._running and self.active:
-            base = self._get_buf().copy()
-            with self._lock:
-                effects = dict(self.active)
-            frame = base.copy()
-            for name, cfg in effects.items():
-                try:
-                    frame = self._apply(frame, cfg)
-                    cfg["frame"] += 1
-                except: pass
-            self._send(frame)
-            time.sleep(0.05)
-        self._running = False
-
-    def _apply(self, frame, cfg):
-        et = cfg["type"]
-        p  = cfg.get("params", {})
-        n  = cfg["frame"]
+    def _one(self, frame, cfg):
+        et   = cfg["type"]
+        p    = cfg.get("params", {})
+        n    = cfg["frame"]
         h, w = frame.shape
 
         if et == "flicker":
-            rate    = float(p.get("rate", 0.05))
-            mask    = np.random.rand(h, w) < rate
-            frame   = np.where(mask, 1 - frame, frame).astype(np.uint8)
+            mask = np.random.rand(h, w) < float(p.get("rate", 0.05))
+            return np.where(mask, 1 - frame, frame).astype(np.uint8)
 
-        elif et == "pulse":
-            speed  = float(p.get("speed", 0.5))
-            period = max(1, int(1.0 / (speed * 0.05)))
-            if n % period == 0:
-                frame = (1 - frame).astype(np.uint8)
+        if et == "pulse":
+            # Smooth on/off cycle rather than V7's "invert every Nth frame",
+            # which depended on the content's framerate and so ran at a
+            # different speed for every piece of content.
+            speed  = max(0.05, float(p.get("speed", 0.5)))
+            period = max(2, int(round((1.0 / speed) / 0.05)))
+            return (1 - frame).astype(np.uint8) if (n // period) % 2 else frame
 
-        elif et == "chase":
-            speed = float(p.get("speed", 1.0))
-            x     = int(n * speed) % w
+        if et == "chase":
+            x = int(n * float(p.get("speed", 1.0))) % w
             frame[:, x] = 1 - frame[:, x]
+            return frame
 
-        elif et == "scanline":
-            speed = float(p.get("speed", 0.5))
-            y     = int(n * speed) % h
+        if et == "scanline":
+            y = int(n * float(p.get("speed", 0.5))) % h
             frame[y, :] = 1
+            return frame
 
-        elif et == "noise":
-            density = float(p.get("density", 0.05))
-            mask    = np.random.rand(h, w) < density
-            frame   = np.where(mask, np.random.randint(0, 2, (h, w)), frame).astype(np.uint8)
+        if et == "noise":
+            mask = np.random.rand(h, w) < float(p.get("density", 0.05))
+            return np.where(mask, np.random.randint(0, 2, (h, w)), frame).astype(np.uint8)
+
+        if et == "invert":
+            return (1 - frame).astype(np.uint8)
+
+        if et == "mirror":
+            # Fold the left half onto the right — cheap kaleidoscope.
+            half = w // 2
+            frame[:, w - half:] = np.fliplr(frame[:, :half])
+            return frame
 
         return frame
 
+
 EFFECTS_REGISTRY = {
-    "flicker":  {"label":"Flicker",  "params":[{"id":"rate","label":"Rate","type":"range","min":0.01,"max":0.3,"step":0.01,"default":0.05}]},
-    "pulse":    {"label":"Pulse",    "params":[{"id":"speed","label":"Speed","type":"range","min":0.1,"max":5.0,"step":0.1,"default":0.5}]},
-    "chase":    {"label":"Chase",    "params":[{"id":"speed","label":"Speed","type":"range","min":0.5,"max":5.0,"step":0.5,"default":1.0}]},
-    "scanline": {"label":"Scanline", "params":[{"id":"speed","label":"Speed","type":"range","min":0.2,"max":3.0,"step":0.2,"default":0.5}]},
-    "noise":    {"label":"Noise",    "params":[{"id":"density","label":"Density","type":"range","min":0.01,"max":0.3,"step":0.01,"default":0.05}]},
+    "flicker":  {"label": "Flicker",  "params": [
+        {"id": "rate", "label": "Rate", "type": "range",
+         "min": 0.01, "max": 0.3, "step": 0.01, "default": 0.05}]},
+    "pulse":    {"label": "Pulse",    "params": [
+        {"id": "speed", "label": "Speed", "type": "range",
+         "min": 0.1, "max": 5.0, "step": 0.1, "default": 0.5}]},
+    "chase":    {"label": "Chase",    "params": [
+        {"id": "speed", "label": "Speed", "type": "range",
+         "min": 0.5, "max": 5.0, "step": 0.5, "default": 1.0}]},
+    "scanline": {"label": "Scanline", "params": [
+        {"id": "speed", "label": "Speed", "type": "range",
+         "min": 0.2, "max": 3.0, "step": 0.2, "default": 0.5}]},
+    "noise":    {"label": "Noise",    "params": [
+        {"id": "density", "label": "Density", "type": "range",
+         "min": 0.01, "max": 0.3, "step": 0.01, "default": 0.05}]},
+    "invert":   {"label": "Invert",   "params": []},
+    "mirror":   {"label": "Mirror",   "params": []},
 }

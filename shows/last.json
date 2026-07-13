@@ -1,0 +1,90 @@
+{
+  "saved": "2026-07-13T13:45:02.479710",
+  "sequencer": {
+    "loop": true,
+    "running": false,
+    "steps": [
+      {
+        "id": "90eb6594",
+        "label": "Rotating welcome",
+        "content": {
+          "kind": "text",
+          "text": "WELCOME",
+          "font": "px5x7",
+          "size": 21,
+          "align": "center",
+          "valign": "middle",
+          "motion": "static",
+          "speed": 30
+        },
+        "duration": 6.0,
+        "enabled": true,
+        "transition": null,
+        "last_run": null
+      },
+      {
+        "id": "e60eb638",
+        "label": "News ticker",
+        "content": {
+          "kind": "text",
+          "text": "{rss}",
+          "font": "px5x7",
+          "size": 14,
+          "align": "center",
+          "valign": "middle",
+          "motion": "scroll_left",
+          "speed": 30
+        },
+        "duration": 12.0,
+        "enabled": true,
+        "transition": null,
+        "last_run": null
+      },
+      {
+        "id": "75c612c0",
+        "label": "Fireworks",
+        "content": {
+          "kind": "animation",
+          "animation": "fireworks",
+          "params": {}
+        },
+        "duration": 15.0,
+        "enabled": true,
+        "transition": null,
+        "last_run": null
+      }
+    ],
+    "overlays": [
+      {
+        "id": "b8b67768",
+        "label": "Closing time",
+        "content": {
+          "kind": "text",
+          "text": "CLOSING SOON",
+          "font": "px5x7",
+          "size": 14,
+          "align": "center",
+          "valign": "middle",
+          "motion": "static",
+          "speed": 30
+        },
+        "duration": 10.0,
+        "enabled": true,
+        "trigger": {
+          "type": "weekly",
+          "at": "17:00",
+          "days": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        "priority": 5,
+        "last_run": null,
+        "fired": false
+      }
+    ]
+  }
+}

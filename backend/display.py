@@ -89,6 +89,10 @@ class Display:
 
     def send(self, frame):
         with self._lock:
+            # Mirror every frame into the buffer even with no panel attached,
+            # so the browser monitor works offline and you can build a whole
+            # show before the hardware is plugged in.
+            self.buffer = frame.copy()
             if not self.connected or self._ser is None:
                 return False
             try:
@@ -98,7 +102,6 @@ class Display:
                 else:
                     raw = bytes(data)
                 self._ser.write(raw)
-                self.buffer = frame.copy()
                 return True
             except Exception as e:
                 log.warning(f"Send failed: {e}")
