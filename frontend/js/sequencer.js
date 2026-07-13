@@ -280,6 +280,7 @@ function openEditor(type, id) {
   stepEd.setSpec(model.content);
 
   drawer.classList.add("open");
+  document.body.classList.add("drawer-open");
 }
 
 function triggerFields(t) {
@@ -358,6 +359,7 @@ function collectTrigger() {
 
 function closeDrawer() {
   document.getElementById("drawer").classList.remove("open");
+  document.body.classList.remove("drawer-open");
   stepEd?.destroy();
   stepEd  = null;
   editing = null;

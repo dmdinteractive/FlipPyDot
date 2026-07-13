@@ -1,12 +1,12 @@
 {
-  "saved": "2026-07-13T13:45:02.479710",
+  "saved": "2026-07-13T14:02:10.238478",
   "sequencer": {
     "loop": true,
     "running": false,
     "steps": [
       {
-        "id": "90eb6594",
-        "label": "Rotating welcome",
+        "id": "51a1d13f",
+        "label": "Welcome",
         "content": {
           "kind": "text",
           "text": "WELCOME",
@@ -14,26 +14,42 @@
           "size": 21,
           "align": "center",
           "valign": "middle",
-          "motion": "static",
-          "speed": 30
+          "motion": "static"
         },
         "duration": 6.0,
         "enabled": true,
         "transition": null,
-        "last_run": null
+        "last_run": 1783972913.3060758
       },
       {
-        "id": "e60eb638",
-        "label": "News ticker",
+        "id": "fd22e53c",
+        "label": "Weather",
         "content": {
           "kind": "text",
-          "text": "{rss}",
+          "text": "{conditions}  {temp}",
           "font": "px5x7",
           "size": 14,
           "align": "center",
           "valign": "middle",
           "motion": "scroll_left",
-          "speed": 30
+          "speed": 35
+        },
+        "duration": 10.0,
+        "enabled": true,
+        "transition": {
+          "animation": "curtain_open"
+        },
+        "last_run": 1783972919.311439
+      },
+      {
+        "id": "52b0302d",
+        "label": "Life",
+        "content": {
+          "kind": "animation",
+          "animation": "game_of_life",
+          "params": {
+            "density": 0.4
+          }
         },
         "duration": 12.0,
         "enabled": true,
@@ -41,14 +57,18 @@
         "last_run": null
       },
       {
-        "id": "75c612c0",
-        "label": "Fireworks",
+        "id": "4cebe476",
+        "label": "Clock",
         "content": {
-          "kind": "animation",
-          "animation": "fireworks",
-          "params": {}
+          "kind": "text",
+          "text": "{time}",
+          "font": "px5x7",
+          "size": 28,
+          "align": "center",
+          "valign": "middle",
+          "blink": 1
         },
-        "duration": 15.0,
+        "duration": 8.0,
         "enabled": true,
         "transition": null,
         "last_run": null
@@ -56,19 +76,17 @@
     ],
     "overlays": [
       {
-        "id": "b8b67768",
-        "label": "Closing time",
+        "id": "311847c6",
+        "label": "Closing",
         "content": {
           "kind": "text",
-          "text": "CLOSING SOON",
+          "text": "CLOSING IN 15 MINUTES",
           "font": "px5x7",
           "size": 14,
-          "align": "center",
-          "valign": "middle",
-          "motion": "static",
-          "speed": 30
+          "motion": "scroll_left",
+          "speed": 40
         },
-        "duration": 10.0,
+        "duration": 8.0,
         "enabled": true,
         "trigger": {
           "type": "weekly",

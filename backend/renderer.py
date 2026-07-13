@@ -268,6 +268,38 @@ def preview(spec, w, h, max_frames=240):
     return out
 
 
+def measure(spec, w, h):
+    """How big the content is, and whether it will fit.
+
+    Static text wider than the panel is silently cropped by compose(), which
+    is a miserable thing to discover on the wall. The editor uses this to say
+    so up front and suggest the fix.
+    """
+    spec = spec or {}
+    if spec.get("kind", "text") != "text":
+        return {"fits": True}
+
+    bmp = render_text_bitmap(spec)
+    bw, bh = bmp.shape[1], bmp.shape[0]
+    scrolls_x = spec.get("motion") in ("scroll_left", "scroll_right")
+    scrolls_y = spec.get("motion") in ("scroll_up", "scroll_down")
+
+    over_x = bw > w and not scrolls_x
+    over_y = bh > h and not scrolls_y
+
+    hint = None
+    if over_x:
+        hint = (f"Text is {bw}px wide — {bw - w}px wider than the panel, so the "
+                f"ends will be cut off. Use a smaller size, a narrower font, "
+                f"or set motion to Scroll ←.")
+    elif over_y:
+        hint = (f"Text is {bh}px tall — taller than the {h}px panel. "
+                f"Reduce the size or line spacing.")
+
+    return {"fits": not (over_x or over_y), "text_w": bw, "text_h": bh,
+            "panel_w": w, "panel_h": h, "hint": hint}
+
+
 def is_static(spec):
     """True if the spec resolves to a single held frame."""
     spec = spec or {}

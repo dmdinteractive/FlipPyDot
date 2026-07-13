@@ -91,7 +91,21 @@ class ContentEditor {
   async _doPreview() {
     if (!this.dc) return;
     const d = await post("/api/preview", {spec: this.spec, max_frames: 300});
-    if (d?.success) this.preview.load(d.frames);
+    if (!d?.success) return;
+    this.preview.load(d.frames);
+
+    const meta = this.root.querySelector("#ed-prev-meta");
+    if (!meta) return;
+    const m = d.measure || {};
+    if (m.hint) {
+      meta.className   = "ed-prev-meta warn";
+      meta.textContent = "⚠ " + m.hint;
+    } else {
+      meta.className = "ed-prev-meta";
+      meta.textContent = d.static
+        ? `${d.width}×${d.height} · still frame`
+        : `${d.width}×${d.height} · ${d.frames.length} frames`;
+    }
   }
 
   // ── render ──────────────────────────────────────────────────────

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+.DS_Store
+
+# Runtime state, not source
+logs/
+shows/last.json

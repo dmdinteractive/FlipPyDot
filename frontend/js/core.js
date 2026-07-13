@@ -74,12 +74,17 @@ class DotCanvas {
   }
 
   resize(w, h) {
-    if (w === this.w && h === this.h && this.canvas.width) return;
+    // Compare against the canvas's real pixel size, not a truthiness check on
+    // canvas.width — a fresh <canvas> already reports 300, so a truthy test
+    // would skip the very first resize and leave the display clipped.
+    const step = this.dot + this.gap;
+    const cw = w * step + this.gap;
+    const ch = h * step + this.gap;
+    if (this.canvas.width === cw && this.canvas.height === ch) return;
     this.w = w;
     this.h = h;
-    const step = this.dot + this.gap;
-    this.canvas.width  = w * step + this.gap;
-    this.canvas.height = h * step + this.gap;
+    this.canvas.width  = cw;
+    this.canvas.height = ch;
   }
 
   draw(buf) {

@@ -103,7 +103,18 @@ def load_last():
     try:
         with open(p) as f:
             data = json.load(f)
-        seq = data.get("sequencer", {})
+
+        seq = data.get("sequencer")
+        if seq is None and "scheduler" in data:
+            # Upgrading in place from V7: the autosave held a flat cron list.
+            # Migrate it rather than starting the user from an empty playlist.
+            seq = show_mgr.migrate_v7(data["scheduler"])
+            seq["running"] = data.get("scheduler_running", False)
+            log.info(f"Migrated V7 autosave: {len(seq['steps'])} steps, "
+                     f"{len(seq['overlays'])} overlays")
+        if not seq:
+            return
+
         sequencer.load(seq)
         if seq.get("running"):
             sequencer.start()
@@ -193,6 +204,7 @@ def api_preview():
             "success": True,
             "frames":  frames,
             "static":  renderer.is_static(spec),
+            "measure": renderer.measure(spec, w, h),
             "width":   w,
             "height":  h,
         })

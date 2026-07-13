@@ -651,7 +651,7 @@ input[type=range]::-webkit-slider-thumb {
   box-shadow: -12px 0 40px rgba(0,0,0,0.12);
 }
 .drawer.open { transform: translateX(0); }
-.drawer.open ~ .drawer-scrim { opacity: 1; pointer-events: auto; }
+body.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
 .drawer-scrim {
   position: fixed; inset: 0; background: rgba(10,10,10,0.28); z-index: 50;
   opacity: 0; pointer-events: none; transition: opacity 0.22s;
@@ -695,3 +695,5 @@ input[type=range]::-webkit-slider-thumb {
 .v7 { color: #b58a2b; font-weight: 400; }
 
 .sys-info { font-family: var(--f-mono); font-size: 0.65rem; color: var(--mid); line-height: 2.2; }
+.ed-prev-meta { max-width: 340px; line-height: 1.5; }
+.ed-prev-meta.warn { color: #a8641f; }
