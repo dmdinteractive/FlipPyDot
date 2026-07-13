@@ -12,15 +12,20 @@
 
 let FONTS = [];
 let ANIMS = [];
-let VARS  = {};
+let TOKEN_GROUPS = [];        // [{group, tokens:[{token, value}], ok, error}]
 
 async function loadEditorData() {
-  const [f, a, v] = await Promise.all([
-    get("/api/fonts"), get("/api/animations"), get("/api/variables/values"),
+  const [f, a, t] = await Promise.all([
+    get("/api/fonts"), get("/api/animations"), get("/api/variables/tokens"),
   ]);
   FONTS = f?.fonts || [];
   ANIMS = a?.animations || [];
-  VARS  = v || {};
+  TOKEN_GROUPS = t?.groups || [];
+}
+
+/** Flat list of every token, for the simple chip rows. */
+function allTokens() {
+  return TOKEN_GROUPS.flatMap(g => g.tokens || []);
 }
 
 const MOTIONS = [
@@ -45,6 +50,7 @@ const TRANSITIONS = [
 ];
 
 function defaultSpec(kind = "text") {
+  if (kind === "layout")    return {kind: "layout", zones: []};
   if (kind === "animation") return {kind: "animation", animation: "bounce_balls", params: {}};
   if (kind === "image")     return {kind: "image", frames: []};
   if (kind === "clear")     return {kind: "clear"};
@@ -111,6 +117,22 @@ class ContentEditor {
   // ── render ──────────────────────────────────────────────────────
   render() {
     const s = this.spec;
+
+    // A dashboard needs the full width for its stage and has its own live
+    // preview built in, so it replaces the standard form/preview split.
+    if (s.kind === "layout") {
+      this.root.innerHTML = `<div class="ed-kinds" id="ed-kinds"></div>
+                             <div id="ed-layout"></div>`;
+      this._renderKinds(this.root.querySelector("#ed-kinds"));
+      this.layout?.destroy();
+      this.layout = new LayoutEditor(this.root.querySelector("#ed-layout"), {
+        spec: s,
+        onChange: spec => { this.spec = spec; this.opts.onChange?.(spec); },
+      });
+      this.layout.setSpec(s);
+      return;
+    }
+
     this.root.innerHTML = `
       <div class="ed">
         <div class="ed-form">
@@ -124,21 +146,7 @@ class ContentEditor {
         </div>
       </div>`;
 
-    // Kind switcher
-    const kinds = [["text", "Text"], ["animation", "Animation"],
-                   ["image", "Image"], ["clear", "Clear"], ["fill", "Fill"]];
-    const kw = this.root.querySelector("#ed-kinds");
-    kinds.forEach(([k, label]) => {
-      const b = document.createElement("button");
-      b.className = "ed-kind" + (s.kind === k ? " active" : "");
-      b.textContent = label;
-      b.onclick = () => {
-        this.spec = defaultSpec(k);
-        this.opts.onChange?.(this.spec);
-        this.render();
-      };
-      kw.appendChild(b);
-    });
+    this._renderKinds(this.root.querySelector("#ed-kinds"));
 
     const fields = this.root.querySelector("#ed-fields");
     if (s.kind === "text")           this._textFields(fields);
@@ -152,6 +160,24 @@ class ContentEditor {
     this.dc      = new DotCanvas(canvas, {dot: 3, gap: 1});
     this.preview = new PreviewPlayer(this.dc);
     this._doPreview();
+  }
+
+  _renderKinds(kw) {
+    if (!kw) return;
+    const kinds = [["text", "Text"], ["layout", "Dashboard"], ["animation", "Animation"],
+                   ["image", "Image"], ["clear", "Clear"], ["fill", "Fill"]];
+    kw.innerHTML = "";
+    kinds.forEach(([k, label]) => {
+      const b = document.createElement("button");
+      b.className = "ed-kind" + (this.spec.kind === k ? " active" : "");
+      b.textContent = label;
+      b.onclick = () => {
+        this.spec = defaultSpec(k);
+        this.opts.onChange?.(this.spec);
+        this.render();
+      };
+      kw.appendChild(b);
+    });
   }
 
   // ── text ────────────────────────────────────────────────────────
@@ -245,15 +271,24 @@ class ContentEditor {
         </div>
       </details>`;
 
-    // Variable chips — click to insert at the cursor.
+    // Token chips — click to insert at the cursor. Grouped by source, so the
+    // earthquake tokens sit together and it's obvious where each came from.
     const chips = el.querySelector("#e-chips");
-    Object.keys(VARS).filter(k => !k.startsWith("rss_")).forEach(k => {
-      const c = document.createElement("button");
-      c.className = "chip";
-      c.textContent = "{" + k + "}";
-      c.title = String(VARS[k]);
-      c.onclick = () => this._insert("{" + k + "}");
-      chips.appendChild(c);
+    TOKEN_GROUPS.forEach(g => {
+      if (!g.tokens?.length) return;
+      const lbl = document.createElement("span");
+      lbl.className = "chip-group";
+      lbl.textContent = g.group;
+      if (g.ok === false) { lbl.classList.add("err"); lbl.title = g.error || "fetch failed"; }
+      chips.appendChild(lbl);
+      g.tokens.forEach(t => {
+        const c = document.createElement("button");
+        c.className = "chip";
+        c.textContent = "{" + t.token + "}";
+        c.title = "currently: " + t.value;
+        c.onclick = () => this._insert("{" + t.token + "}");
+        chips.appendChild(c);
+      });
     });
 
     const ta = el.querySelector("#e-text");
@@ -448,5 +483,6 @@ class ContentEditor {
 
   destroy() {
     this.preview?.stop();
+    this.layout?.destroy();
   }
 }

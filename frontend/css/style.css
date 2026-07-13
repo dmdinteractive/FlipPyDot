@@ -697,3 +697,125 @@ body.drawer-open .drawer-scrim { opacity: 1; pointer-events: auto; }
 .sys-info { font-family: var(--f-mono); font-size: 0.65rem; color: var(--mid); line-height: 2.2; }
 .ed-prev-meta { max-width: 340px; line-height: 1.5; }
 .ed-prev-meta.warn { color: #a8641f; }
+
+/* ============================================================
+   V8.2 — Layout (zone) editor, data sources, tokens
+   ============================================================ */
+
+/* ── layout editor ────────────────────────────────────────── */
+.lay { display: flex; gap: 1.5rem; align-items: flex-start; flex-wrap: wrap; }
+.lay-stage-col { flex: 0 0 auto; }
+.lay-props {
+  flex: 1; min-width: 300px; background: var(--surface);
+  border: 1px solid var(--border); padding: 0.9rem;
+}
+.lay-toolbar {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.lay-toolbar .fi { max-width: 130px; }
+.lay-hint {
+  font-family: var(--f-mono); font-size: 0.58rem; color: var(--dim);
+  margin-left: auto; padding-left: 8px;
+}
+
+/* The zone overlay sits exactly on top of the preview canvas. */
+.lay-stage { position: relative; display: inline-block; line-height: 0; }
+.lay-stage canvas {
+  display: block; background: var(--canvas-bg);
+  border: 1px solid var(--border); image-rendering: pixelated;
+}
+.lay-zones { position: absolute; inset: 1px; }
+
+.lz {
+  position: absolute; box-sizing: border-box; cursor: grab;
+  border: 1px dashed rgba(120,200,255,0.55);
+  background: rgba(120,200,255,0.06);
+}
+.lz:hover  { border-color: rgba(120,200,255,0.9); background: rgba(120,200,255,0.12); }
+.lz.sel    { border: 1px solid #ffd24a; background: rgba(255,210,74,0.12); z-index: 2; }
+.lz.off    { opacity: 0.35; border-style: dotted; }
+.lz:active { cursor: grabbing; }
+.lz-tag {
+  position: absolute; top: -13px; left: -1px;
+  font-family: var(--f-mono); font-size: 0.5rem; line-height: 1;
+  padding: 2px 3px; background: rgba(10,10,10,0.75); color: #f0eee8;
+  white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis;
+}
+.lz.sel .lz-tag { background: #ffd24a; color: #0a0a0a; }
+.lz-h {
+  position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px;
+  background: #ffd24a; border: 1px solid #0a0a0a; cursor: nwse-resize; display: none;
+}
+.lz.sel .lz-h { display: block; }
+
+/* ── zone list ────────────────────────────────────────────── */
+.lay-list { margin-top: 0.75rem; max-width: 430px; }
+.lz-row {
+  display: grid; grid-template-columns: 62px 1fr 92px 24px 24px;
+  align-items: center; gap: 6px; padding: 4px 6px; cursor: pointer;
+  font-family: var(--f-mono); font-size: 0.63rem;
+  border-bottom: 1px solid var(--surface2);
+}
+.lz-row:hover { background: var(--surface); }
+.lz-row.sel   { background: var(--surface2); box-shadow: inset 3px 0 0 #d9a520; }
+.lz-row.off   { opacity: 0.4; }
+.lz-row-type {
+  font-size: 0.5rem; letter-spacing: 0.06em; text-transform: uppercase;
+  border: 1px solid var(--border); color: var(--mid); text-align: center;
+  padding: 2px 3px; border-radius: 2px;
+}
+.lz-row-type.k-text { border-color: #7a8fa6; color: #4d6785; }
+.lz-row-type.k-rule { border-color: #a68a6a; color: #86643d; }
+.lz-row-type.k-box  { border-color: #8aa67a; color: #5d804a; }
+.lz-row-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.lz-row-pos { color: var(--dim); font-size: 0.58rem; }
+
+/* ── token chips ──────────────────────────────────────────── */
+.chip-group {
+  font-family: var(--f-mono); font-size: 0.5rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--dim); align-self: center;
+  padding: 0 4px 0 2px; width: 100%; margin-top: 4px;
+}
+.chip-group.err { color: #c0522f; }
+
+/* ── data sources ─────────────────────────────────────────── */
+.src-row {
+  display: grid; grid-template-columns: 140px 160px 1fr 26px 26px;
+  align-items: center; gap: 0.6rem; padding: 7px 6px;
+  border-bottom: 1px solid var(--surface2);
+  font-family: var(--f-mono); font-size: 0.65rem;
+}
+.src-row:hover { background: var(--surface); }
+.src-row.off { opacity: 0.42; }
+.src-name { color: var(--text); }
+.src-type { color: var(--mid); font-size: 0.6rem; }
+.src-ok      { color: #4a7a3c; }
+.src-err     { color: #c0522f; }
+.src-pending { color: var(--dim); }
+
+.src-test { margin-top: 10px; font-family: var(--f-mono); font-size: 0.65rem; }
+.src-sample {
+  margin-top: 6px; display: flex; flex-direction: column; gap: 1px;
+  max-height: 190px; overflow-y: auto;
+}
+.src-sample > div {
+  display: flex; gap: 0.75rem; padding: 3px 6px; background: var(--surface);
+}
+
+/* ── tokens pane ──────────────────────────────────────────── */
+.tok-group { margin-bottom: 1rem; }
+.tok-group-head {
+  font-family: var(--f-mono); font-size: 0.58rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim); padding: 4px 0;
+  border-bottom: 1px solid var(--border); margin-bottom: 3px;
+  display: flex; justify-content: space-between;
+}
+.tok-group-head.err { color: #c0522f; }
+
+.filter-help {
+  font-family: var(--f-mono); font-size: 0.65rem; color: var(--mid); line-height: 2;
+}
+.filter-help code {
+  background: var(--surface2); padding: 1px 5px; color: var(--text);
+  font-family: var(--f-mono);
+}

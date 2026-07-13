@@ -11,6 +11,7 @@ import os
 import sys
 import time
 import json
+import uuid
 import logging
 import logging.handlers
 from datetime import datetime
@@ -58,9 +59,10 @@ from image_processor import process_image, frames_to_json
 from variables       import substitute, get_all_values, get_status as var_status
 from wizard          import PanelWizard
 import renderer
-import fonts    as font_mod
-import variables as var_mod
-import show      as show_mgr
+import fonts       as font_mod
+import variables   as var_mod
+import datasources as ds
+import show        as show_mgr
 
 show_mgr.SHOWS_DIR = SHOWS_DIR
 
@@ -122,6 +124,38 @@ def load_last():
                  f"{len(sequencer.overlays)} overlays")
     except Exception as e:
         log.warning(f"Could not restore last state: {e}")
+
+
+def migrate_var_config(cfg):
+    """V7 kept exactly one weather config and one RSS url as flat keys. V8 has a
+    list of sources, so fold the old settings into equivalent sources rather
+    than making the user re-enter their API key."""
+    if cfg.get("sources") is not None:
+        return cfg
+
+    sources = []
+    if (cfg.get("weather_api_key") or "").strip():
+        sources.append({
+            "id": uuid.uuid4().hex[:8], "type": "weather", "name": "weather",
+            "enabled": True, "interval": int(cfg.get("update_interval", 600) or 600),
+            "config": {"api_key": cfg.get("weather_api_key", ""),
+                       "city": cfg.get("weather_city", "San Francisco"),
+                       "units": cfg.get("weather_units", "imperial")},
+        })
+    if (cfg.get("rss_url") or "").strip():
+        sources.append({
+            "id": uuid.uuid4().hex[:8], "type": "rss", "name": "rss",
+            "enabled": True, "interval": int(cfg.get("update_interval", 600) or 600),
+            "rotate_every": 10,
+            "config": {"url": cfg.get("rss_url", ""),
+                       "max_items": int(cfg.get("rss_max_items", 10) or 10)},
+        })
+
+    out = {"sources": sources}
+    if sources:
+        cfg_mod.save("variables", out)
+        log.info(f"Migrated V7 variable config into {len(sources)} source(s)")
+    return out
 
 
 # ── Flask ─────────────────────────────────────────────────────────
@@ -428,29 +462,130 @@ def api_image_upload():
         return jsonify({"success": False, "error": str(e)}), 400
 
 
-# ── Variables ─────────────────────────────────────────────────────
+# ── Variables / tokens ────────────────────────────────────────────
 @app.route("/api/variables")
 def api_variables():
     return jsonify(var_status())
 
 
-@app.route("/api/variables/config", methods=["POST"])
-def api_variables_config():
-    d = body()
-    var_mod.configure(d)
-    cfg_mod.save("variables", d)
-    return jsonify({"success": True})
-
-
 @app.route("/api/variables/values")
 def api_variables_values():
-    return jsonify(get_all_values())
+    return jsonify({k: str(v) for k, v in get_all_values().items()})
+
+
+@app.route("/api/variables/tokens")
+def api_variables_tokens():
+    """Every resolving token, grouped by source — drives the editor's chips."""
+    return jsonify({"groups": var_mod.list_tokens()})
 
 
 @app.route("/api/variables/preview", methods=["POST"])
 def api_variables_preview():
     t = body().get("text", "")
     return jsonify({"original": t, "substituted": substitute(t)})
+
+
+# ── Data sources ──────────────────────────────────────────────────
+@app.route("/api/sources/types")
+def api_source_types():
+    """What kinds of source exist, their config fields, and their tokens."""
+    return jsonify({"types": ds.describe()})
+
+
+@app.route("/api/sources")
+def api_sources():
+    cfg = var_mod.get_config()
+    return jsonify({
+        "sources": cfg.get("sources", []),
+        "status":  var_status().get("sources", {}),
+    })
+
+
+def _save_sources(sources):
+    cfg = {"sources": sources}
+    var_mod.configure(cfg)
+    cfg_mod.save("variables", cfg)
+
+
+@app.route("/api/sources", methods=["POST"])
+def api_add_source():
+    d = body()
+    stype = d.get("type")
+    if stype not in ds.REGISTRY:
+        return jsonify({"success": False, "error": f"Unknown type: {stype}"}), 400
+
+    sources = var_mod.get_config().get("sources", [])
+    src = {
+        "id":           uuid.uuid4().hex[:8],
+        "type":         stype,
+        "name":         (d.get("name") or stype).strip(),
+        "enabled":      d.get("enabled", True),
+        "interval":     d.get("interval") or ds.REGISTRY[stype].get("interval", 300),
+        "rotate_every": d.get("rotate_every", 10),
+        "config":       d.get("config", {}) or {},
+    }
+    sources.append(src)
+    _save_sources(sources)
+    return jsonify({"success": True, "source": src})
+
+
+@app.route("/api/sources/<sid>", methods=["PUT"])
+def api_update_source(sid):
+    d = body()
+    sources = var_mod.get_config().get("sources", [])
+    for src in sources:
+        if src.get("id") == sid:
+            for k in ("name", "enabled", "interval", "rotate_every", "config"):
+                if k in d:
+                    src[k] = d[k]
+            _save_sources(sources)
+            return jsonify({"success": True, "source": src})
+    return jsonify({"success": False, "error": "No such source"}), 404
+
+
+@app.route("/api/sources/<sid>", methods=["DELETE"])
+def api_delete_source(sid):
+    sources = [s for s in var_mod.get_config().get("sources", [])
+               if s.get("id") != sid]
+    _save_sources(sources)
+    return jsonify({"success": True})
+
+
+@app.route("/api/sources/test", methods=["POST"])
+def api_test_source():
+    """Fetch a source right now and show what came back.
+
+    This is the difference between 'my token is blank, why?' and seeing the
+    actual API error — so you can fix a URL or a field path before you ever
+    put it on the wall.
+    """
+    d = body()
+    src = {"type": d.get("type"), "name": d.get("name", "test"),
+           "config": d.get("config", {}) or {}}
+    data, err = ds.fetch(src)
+    if err:
+        return jsonify({"success": False, "error": err})
+
+    name  = src["name"]
+    spec  = ds.REGISTRY.get(src["type"], {})
+    bare  = spec.get("bare", False)
+    items = data.get("_items") or []
+    sample = {}
+    for k, v in data.items():
+        if k == "_items":
+            continue
+        sample[k if bare else f"{name}_{k}"] = var_mod._stringify(v)
+    if items:
+        for k, v in items[0].items():
+            sample[f"{name}_{k}"] = var_mod._stringify(v)
+
+    return jsonify({"success": True, "count": len(items) or 1, "tokens": sample})
+
+
+@app.route("/api/sources/refresh", methods=["POST"])
+def api_refresh_sources():
+    var_mod.refresh_now()
+    return jsonify({"success": True})
 
 
 # ── Effects ───────────────────────────────────────────────────────
@@ -567,7 +702,7 @@ if __name__ == "__main__":
     display.start()
     time.sleep(1.5)
 
-    var_mod.configure(var_cfg)
+    var_mod.configure(migrate_var_config(var_cfg))
     var_mod.start()
 
     load_last()

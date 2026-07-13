@@ -22,11 +22,16 @@ visual pace whether the text is 20px or 900px wide, which is the thing that
 actually made the old scroll impossible to tune.
 """
 
+import time
+import logging
+
 import numpy as np
 
 import fonts as font_mod
 from variables import substitute
 from animations import get_animation
+
+log = logging.getLogger(__name__)
 
 # Flipdot panels physically cannot flip faster than this; asking for more just
 # drops frames on the serial line.
@@ -188,6 +193,227 @@ def _text_frames(spec, w, h):
                 return
 
 
+# ── layout: many zones on one frame ───────────────────────────────
+#
+# This is what makes a real dashboard possible. A layout is a list of zones,
+# each with its own box, font, alignment and motion. Every zone re-substitutes
+# its {tokens} on every frame, so a clock ticks and a temperature updates while
+# the screen as a whole just sits there — the thing a single text spec could
+# never do.
+#
+# Two details carry their weight here:
+#   * Each zone is CLIPPED to its own box, so an over-long headline can't bleed
+#     across the panel into the clock next to it.
+#   * Scroll offsets come from wall-clock time, not a frame counter, so two
+#     zones scrolling at the same speed stay in step even if a frame is slow.
+
+# Rendering every zone's text from scratch 20x a second is pure waste when the
+# text only changes once a second. Cache the bitmap against its inputs.
+_zone_cache = {}
+_ZONE_CACHE_MAX = 256
+
+
+def wrap_text(face, text, px, tracking, max_w):
+    """Greedy word-wrap to `max_w` pixels.
+
+    Measured against the real rendered width rather than a character count, so
+    it is correct for proportional TTF faces as well as the fixed-width bitmap
+    ones. Without this, anything paragraph-shaped — a quote, a long headline —
+    can only be scrolled, never laid out as a block.
+    """
+    out = []
+    for para in str(text).split("\n"):
+        line = ""
+        for word in para.split(" "):
+            trial = word if not line else line + " " + word
+            if face.render(trial, px, tracking=tracking).shape[1] <= max_w or not line:
+                line = trial
+            else:
+                out.append(line)
+                line = word
+        out.append(line)
+    return "\n".join(out)
+
+
+def _zone_text_bitmap(zone, resolved, max_w=None):
+    key = (resolved, zone.get("font"), int(zone.get("size", 14)),
+           int(zone.get("tracking", 1)), int(zone.get("leading", 1)),
+           bool(zone.get("bold")), bool(zone.get("wrap")), max_w)
+    hit = _zone_cache.get(key)
+    if hit is None:
+        face = font_mod.get(zone.get("font", font_mod.DEFAULT_KEY))
+        size = int(zone.get("size", 14))
+        trk  = int(zone.get("tracking", 1))
+        text = resolved
+        if zone.get("wrap") and max_w:
+            text = wrap_text(face, resolved, size, trk, max_w)
+        hit = face.render(text, size, tracking=trk,
+                          leading=int(zone.get("leading", 1)))
+        if zone.get("bold"):
+            hit = np.clip(hit + np.roll(hit, 1, axis=1), 0, 1).astype(np.uint8)
+        if len(_zone_cache) > _ZONE_CACHE_MAX:
+            _zone_cache.clear()
+        _zone_cache[key] = hit
+    return hit
+
+
+def _blit_clipped(canvas, bmp, box, align, valign, dx, dy):
+    """Draw bmp inside box=(x, y, w, h), clipped to it."""
+    zx, zy, zw, zh = box
+    ch, cw = canvas.shape
+    bh, bw = bmp.shape
+    if bh == 0 or bw == 0 or zw <= 0 or zh <= 0:
+        return
+
+    if   align == "left":   x = zx
+    elif align == "right":  x = zx + zw - bw
+    else:                   x = zx + (zw - bw) // 2
+    if   valign == "top":    y = zy
+    elif valign == "bottom": y = zy + zh - bh
+    else:                    y = zy + (zh - bh) // 2
+    x += int(dx)
+    y += int(dy)
+
+    # Clip to the zone box AND to the panel.
+    x0 = max(zx, 0, x)
+    y0 = max(zy, 0, y)
+    x1 = min(zx + zw, cw, x + bw)
+    y1 = min(zy + zh, ch, y + bh)
+    if x1 <= x0 or y1 <= y0:
+        return
+
+    canvas[y0:y1, x0:x1] = np.maximum(
+        canvas[y0:y1, x0:x1],
+        bmp[y0 - y:y1 - y, x0 - x:x1 - x],
+    )
+
+
+def _zone_box(zone, w, h):
+    zx = int(zone.get("x", 0))
+    zy = int(zone.get("y", 0))
+    zw = int(zone.get("w", w))
+    zh = int(zone.get("h", h))
+    return zx, zy, max(0, zw), max(0, zh)
+
+
+def _draw_zone(canvas, zone, w, h, elapsed):
+    box = _zone_box(zone, w, h)
+    zx, zy, zw, zh = box
+    ztype = zone.get("type", "text")
+
+    if ztype == "rule":
+        x0, y0 = max(0, zx), max(0, zy)
+        x1, y1 = min(w, zx + max(1, zw)), min(h, zy + max(1, zh))
+        if x1 > x0 and y1 > y0:
+            canvas[y0:y1, x0:x1] = 1
+        return
+
+    if ztype == "box":
+        x0, y0 = max(0, zx), max(0, zy)
+        x1, y1 = min(w, zx + zw), min(h, zy + zh)
+        if x1 <= x0 or y1 <= y0:
+            return
+        if zone.get("filled"):
+            canvas[y0:y1, x0:x1] = 1
+        else:
+            t = max(1, int(zone.get("thickness", 1)))
+            canvas[y0:min(y0 + t, y1), x0:x1] = 1
+            canvas[max(y0, y1 - t):y1, x0:x1] = 1
+            canvas[y0:y1, x0:min(x0 + t, x1)] = 1
+            canvas[y0:y1, max(x0, x1 - t):x1] = 1
+        return
+
+    # text
+    resolved = substitute(str(zone.get("text", "")))
+    if not resolved:
+        return
+    bmp = _zone_text_bitmap(zone, resolved, max_w=zw)
+    if bmp.shape[1] == 0:
+        return
+
+    motion = zone.get("motion", "static")
+    dx, dy = int(zone.get("dx", 0)), int(zone.get("dy", 0))
+    align  = zone.get("align", "left")
+    valign = zone.get("valign", "middle")
+
+    if motion == "static":
+        _blit_clipped(canvas, bmp, box, align, valign, dx, dy)
+        return
+
+    speed = max(1.0, float(zone.get("speed", 30)))
+    bh, bw = bmp.shape
+
+    if motion in ("scroll_left", "scroll_right"):
+        gap     = int(zone.get("gap", max(8, zw)))
+        strip_w = bw + max(1, gap)
+        strip = np.zeros((bh, strip_w), dtype=np.uint8)
+        strip[:, :bw] = bmp
+
+        pos  = int(elapsed * speed) % strip_w
+        idx  = np.arange(zw)
+        cols = ((pos + idx) if motion == "scroll_left" else (-pos + idx)) % strip_w
+        view = strip[:, cols]
+        _blit_clipped(canvas, view, box, "left", valign, 0, dy)
+        return
+
+    gap     = int(zone.get("gap", max(4, zh)))
+    strip_h = bh + max(1, gap)
+    strip = np.zeros((strip_h, bw), dtype=np.uint8)
+    strip[:bh, :] = bmp
+
+    pos  = int(elapsed * speed) % strip_h
+    idx  = np.arange(zh)
+    rows = ((pos + idx) if motion == "scroll_up" else (-pos + idx)) % strip_h
+    view = strip[rows, :]
+    _blit_clipped(canvas, view, box, align, "top", dx, 0)
+
+
+def _layout_fps(spec):
+    """Fast enough for the fastest scrolling zone; otherwise just fast enough
+    that a ticking clock lands within a fraction of a second of the real one.
+    The player drops duplicate frames, so a slow layout costs no serial time."""
+    speeds = [float(z.get("speed", 30)) for z in spec.get("zones", [])
+              if z.get("type", "text") == "text"
+              and z.get("motion", "static") != "static"]
+    if not speeds:
+        return 4.0
+    return max(4.0, min(MAX_FPS, max(speeds)))
+
+
+def _layout_frames(spec, w, h):
+    zones = spec.get("zones") or []
+    if not zones:
+        yield blank(w, h), None
+        return
+
+    fps   = float(spec.get("fps") or _layout_fps(spec))
+    delay = 1.0 / fps
+
+    # Scroll offsets advance by a VIRTUAL clock — one `delay` per frame — not
+    # by wall time. The player sleeps `delay` between frames, so the two agree
+    # during playback; but preview() drains this generator as fast as it can to
+    # collect frames for the browser, and a wall clock would report ~0 elapsed
+    # for all of them, leaving every preview frame identical and the layout
+    # looking frozen. All zones share the counter, so they stay in step.
+    elapsed = 0.0
+
+    # Deliberately infinite: a layout is a live surface, not a clip. The player
+    # stops it when the step's duration runs out.
+    while True:
+        canvas = blank(w, h)
+        for z in zones:
+            if z.get("enabled") is False:
+                continue
+            try:
+                _draw_zone(canvas, z, w, h, elapsed)
+            except Exception as e:
+                log.warning(f"Zone {z.get('id')} failed to draw: {e}")
+        if spec.get("invert"):
+            canvas = (1 - canvas).astype(np.uint8)
+        yield canvas, delay
+        elapsed += delay
+
+
 # ── animation ─────────────────────────────────────────────────────
 def _anim_frames(spec, w, h):
     fn = get_animation(spec.get("animation", "flash"))
@@ -242,6 +468,8 @@ def frames(spec, w, h):
         yield blank(w, h), None
     elif kind == "fill":
         yield np.ones((h, w), dtype=np.uint8), None
+    elif kind == "layout":
+        yield from _layout_frames(spec, w, h)
     elif kind == "animation":
         yield from _anim_frames(spec, w, h)
     elif kind == "image":
@@ -276,6 +504,8 @@ def measure(spec, w, h):
     so up front and suggest the fix.
     """
     spec = spec or {}
+    if spec.get("kind") == "layout":
+        return _measure_layout(spec, w, h)
     if spec.get("kind", "text") != "text":
         return {"fits": True}
 
@@ -306,9 +536,42 @@ def is_static(spec):
     kind = spec.get("kind", "text")
     if kind in ("clear", "fill"):
         return True
+    if kind == "layout":
+        return False          # always live — tokens re-resolve every frame
     if kind == "image":
         return len(spec.get("frames") or []) <= 1
     if kind == "text":
         return (spec.get("motion", "static") == "static"
                 and not float(spec.get("blink", 0) or 0))
     return False
+
+
+def _measure_layout(spec, w, h):
+    """Per-zone overflow report, so the editor can flag the exact zone whose
+    text is too wide for the box you drew rather than just saying 'too big'."""
+    problems = []
+    for z in spec.get("zones", []):
+        if z.get("type", "text") != "text" or z.get("enabled") is False:
+            continue
+        _, _, zw, zh = _zone_box(z, w, h)
+        resolved = substitute(str(z.get("text", "")))
+        if not resolved:
+            continue
+        bmp = _zone_text_bitmap(z, resolved, max_w=zw)
+        bw, bh = bmp.shape[1], bmp.shape[0]
+        scrolls_x = z.get("motion") in ("scroll_left", "scroll_right")
+        scrolls_y = z.get("motion") in ("scroll_up", "scroll_down")
+        if bw > zw and not scrolls_x:
+            problems.append({
+                "zone": z.get("id"), "label": z.get("label") or z.get("text", "")[:18],
+                "hint": f"needs {bw}px, box is {zw}px — widen it, shrink the font, "
+                        f"add |trunc:N, or scroll it",
+            })
+        elif bh > zh and not scrolls_y:
+            problems.append({
+                "zone": z.get("id"), "label": z.get("label") or z.get("text", "")[:18],
+                "hint": f"needs {bh}px tall, box is {zh}px",
+            })
+    return {"fits": not problems, "zones": problems,
+            "hint": (f"{len(problems)} zone(s) overflow their box"
+                     if problems else None)}

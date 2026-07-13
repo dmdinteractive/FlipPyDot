@@ -16,6 +16,8 @@ import time
 import logging
 import threading
 
+import numpy as np
+
 import renderer
 
 log = logging.getLogger(__name__)
@@ -56,6 +58,7 @@ class Player:
             self._gen += 1
             gen = self._gen
             self.current = spec
+            self._last_sent = None
 
         self._done.clear()
         t = threading.Thread(target=self._run, args=(spec, duration, loop, gen),
@@ -68,6 +71,7 @@ class Player:
         with self._lock:
             self._gen += 1
             self.current = None
+            self._last_sent = None
         self._done.set()
         if clear:
             self._display.clear()
@@ -127,10 +131,27 @@ class Player:
 
     # ── output ────────────────────────────────────────────────────
     def _emit(self, frame):
-        """The only path to the panel. Effects are layered on here, over the
-        clean content frame, so they never compound on their own output."""
+        """The only path to the panel.
+
+        Effects are layered on here, over the clean content frame, so they
+        never compound on their own output.
+
+        Identical frames are dropped. This matters physically: a live dashboard
+        re-renders several times a second so its clock stays honest, but the
+        pixels only change once a second. At 57600 baud a full 84x42 frame is
+        ~441 bytes — around 13 frames/sec of headroom, total. Without this the
+        layout would saturate the serial line and make the panel clack
+        continuously for no visible reason.
+        """
         if self._effects is not None and self._effects.any_active:
+            # An effect is animating, so every frame is genuinely different.
             frame = self._effects.apply(frame)
+            self._last_sent = None
+        elif self._last_sent is not None and np.array_equal(frame, self._last_sent):
+            return
+        else:
+            self._last_sent = frame.copy()
+
         self._display.send(frame)
 
     # ── generation-aware sleeping ─────────────────────────────────

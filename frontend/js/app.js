@@ -19,8 +19,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   composeEd.setSpec(defaultSpec("text"));
 
   scanPorts();
-  loadVarsConfig();
   loadFontList();
+  loadSources();
   refreshSeq();
 
   tickClock();
@@ -52,6 +52,7 @@ function showTab(tab) {
   history.replaceState(null, "", "#" + tab);
 
   if (tab === "settings")  { loadShowList(); loadFontList(); }
+  if (tab === "sources")   loadSources();
   if (tab === "variables") refreshVarGrid();
   if (tab === "effects")   loadFxList();
 }
@@ -165,54 +166,31 @@ async function composeAddStep() {
   }
 }
 
-// ── Variables ─────────────────────────────────────────────────────
-async function loadVarsConfig() {
-  const d = await get("/api/variables");
-  if (!d?.config) return;
-  const c = d.config;
-  const set = (id, k) => {
-    const el = document.getElementById(id);
-    if (el && c[k] !== undefined) el.value = c[k];
-  };
-  set("var-key", "weather_api_key");
-  set("var-city", "weather_city");
-  set("var-units", "weather_units");
-  set("var-rss", "rss_url");
-  set("var-interval", "update_interval");
-  if (d.values) updateVarGrid(d.values);
-}
-
-async function saveVars() {
-  const cfg = {
-    weather_api_key: document.getElementById("var-key").value || "",
-    weather_city:    document.getElementById("var-city").value || "",
-    weather_units:   document.getElementById("var-units").value || "imperial",
-    rss_url:         document.getElementById("var-rss").value || "",
-    update_interval: parseInt(document.getElementById("var-interval").value || "300"),
-  };
-  const d = await post("/api/variables/config", cfg);
-  if (d?.success) {
-    toast("Variables saved", "ok");
-    await loadEditorData();          // refresh the chips in every editor
-    refreshVarGrid();
-  }
-}
-
+// ── Tokens ────────────────────────────────────────────────────────
 async function refreshVarGrid() {
-  const v = await get("/api/variables/values");
-  if (v) updateVarGrid(v);
-}
-
-function updateVarGrid(values) {
+  await loadEditorData();
   const grid = document.getElementById("var-grid");
   if (!grid) return;
-  grid.innerHTML = Object.entries(values)
-    .filter(([k]) => !k.startsWith("rss_"))
-    .map(([k, v]) => `
-      <div class="var-row">
-        <span class="var-tok">{${esc(k)}}</span>
-        <span class="var-val">${esc(v)}</span>
-      </div>`).join("");
+  grid.innerHTML = TOKEN_GROUPS.map(g => `
+    <div class="tok-group">
+      <div class="tok-group-head ${g.ok === false ? "err" : ""}">
+        ${esc(g.group)}
+        ${g.ok === false ? `<span class="src-err">✕ ${esc(g.error || "failed")}</span>` : ""}
+      </div>
+      ${(g.tokens || []).map(t => `
+        <div class="var-row">
+          <span class="var-tok">{${esc(t.token)}}</span>
+          <span class="var-val">${esc(t.value)}</span>
+        </div>`).join("") || '<div class="ed-note">No values yet.</div>'}
+    </div>`).join("");
+}
+
+async function testToken() {
+  const text = document.getElementById("var-test")?.value;
+  if (!text) return;
+  const d = await post("/api/variables/preview", {text});
+  const out = document.getElementById("var-test-out");
+  if (out && d) out.textContent = "→ " + d.substituted;
 }
 
 // ── Effects ───────────────────────────────────────────────────────
@@ -350,3 +328,176 @@ async function loadShow(name) {
 }
 
 async function delShow(name) { await del("/api/shows/" + name); loadShowList(); }
+
+// ── Data sources ──────────────────────────────────────────────────
+let SRC_TYPES = [];
+
+async function loadSources() {
+  if (!SRC_TYPES.length) {
+    const t = await get("/api/sources/types");
+    SRC_TYPES = t?.types || [];
+    const sel = document.getElementById("src-type");
+    if (sel) {
+      sel.innerHTML = SRC_TYPES.map(t =>
+        `<option value="${t.type}">${esc(t.label)}</option>`).join("");
+      sel.onchange = renderSourceForm;
+      renderSourceForm();
+    }
+  }
+
+  const d = await get("/api/sources");
+  const list = document.getElementById("src-list");
+  if (!list || !d) return;
+
+  if (!d.sources.length) {
+    list.innerHTML = '<div class="empty" style="text-align:left;padding:0">'
+      + 'No data sources yet. Add one above, then its {tokens} appear in every editor.</div>';
+    return;
+  }
+
+  list.innerHTML = d.sources.map(s => {
+    const st = d.status[s.id] || {};
+    const meta = st.ok === false
+      ? `<span class="src-err">✕ ${esc(st.error || "failed")}</span>`
+      : st.ok
+        ? `<span class="src-ok">✓ ${st.count} item(s) · ${esc((st.last_update || "").slice(11, 19))}</span>`
+        : `<span class="src-pending">… fetching</span>`;
+    const t = SRC_TYPES.find(t => t.type === s.type);
+    return `
+      <div class="src-row ${s.enabled ? "" : "off"}">
+        <span class="src-name">{${esc(s.name)}_…}</span>
+        <span class="src-type">${esc(t?.label || s.type)}</span>
+        <span class="src-meta">${meta}</span>
+        <button class="ic" onclick="toggleSource('${s.id}', ${!s.enabled})"
+          title="${s.enabled ? "Disable" : "Enable"}">${s.enabled ? "◉" : "○"}</button>
+        <button class="ic danger" onclick="delSource('${s.id}')" title="Delete">✕</button>
+      </div>`;
+  }).join("");
+}
+
+function renderSourceForm() {
+  const type = document.getElementById("src-type")?.value;
+  const t = SRC_TYPES.find(x => x.type === type);
+  const host = document.getElementById("src-form");
+  if (!t || !host) return;
+
+  host.innerHTML = `
+    <div class="ed-note" style="margin-bottom:8px">${esc(t.help)}</div>
+    <div class="fg">
+      <div class="ff">
+        <label class="fl">NAME (token prefix)</label>
+        <input type="text" class="fi" id="src-name" value="${esc(t.type.replace("usgs_", "").replace("_", ""))}">
+      </div>
+      ${t.list ? `
+        <div class="ff">
+          <label class="fl">ROTATE EVERY (s)</label>
+          <input type="number" class="fi" id="src-rotate" value="10" min="1">
+        </div>` : ""}
+      <div class="ff">
+        <label class="fl">REFRESH EVERY (s)</label>
+        <input type="number" class="fi" id="src-interval" value="${t.interval}" min="1">
+      </div>
+    </div>
+    ${t.config.length ? `<div class="fg">${t.config.map(c => sourceField(c)).join("")}</div>` : ""}
+    ${t.tokens.length ? `
+      <div class="sh-sm">PROVIDES</div>
+      <div class="var-chips">${t.tokens.map(tk =>
+        `<span class="chip" title="${esc(tk.help)}">{NAME_${esc(tk.suffix)}}</span>`).join("")}</div>` : ""}
+    <div class="src-test" id="src-test"></div>`;
+}
+
+function sourceField(c) {
+  const id = "srcf-" + c.id;
+  if (c.type === "select") {
+    return `<div class="ff"><label class="fl">${esc(c.label)}</label>
+      <select class="fi" id="${id}">${c.options.map(o =>
+        `<option value="${esc(o.value)}" ${o.value === c.default ? "selected" : ""}>${esc(o.label)}</option>`).join("")}
+      </select></div>`;
+  }
+  if (c.type === "number") {
+    return `<div class="ff"><label class="fl">${esc(c.label)}</label>
+      <input type="number" class="fi" id="${id}" value="${c.default}"></div>`;
+  }
+  if (c.type === "datetime") {
+    return `<div class="ff"><label class="fl">${esc(c.label)}</label>
+      <input type="datetime-local" class="fi" id="${id}"></div>`;
+  }
+  if (c.type === "json" || c.type === "fields") {
+    const ph = c.type === "fields"
+      ? '{"price": "bpi.USD.rate"}' : '{"Authorization": "Bearer …"}';
+    return `<div class="ff-wide"><label class="fl">${esc(c.label)}</label>
+      <input type="text" class="fi" id="${id}" placeholder='${ph}'></div>`;
+  }
+  return `<div class="ff-wide"><label class="fl">${esc(c.label)}</label>
+    <input type="text" class="fi" id="${id}" value="${esc(c.default ?? "")}"></div>`;
+}
+
+function collectSourceConfig() {
+  const type = document.getElementById("src-type").value;
+  const t = SRC_TYPES.find(x => x.type === type);
+  const cfg = {};
+  (t.config || []).forEach(c => {
+    const el = document.getElementById("srcf-" + c.id);
+    if (!el) return;
+    if (c.type === "number") cfg[c.id] = parseFloat(el.value || 0);
+    else if (c.type === "json" || c.type === "fields") {
+      try { cfg[c.id] = el.value.trim() ? JSON.parse(el.value) : {}; }
+      catch { throw new Error(`${c.label} must be valid JSON`); }
+    } else cfg[c.id] = el.value;
+  });
+  return {type, config: cfg};
+}
+
+async function testSource() {
+  const out = document.getElementById("src-test");
+  let payload;
+  try { payload = collectSourceConfig(); }
+  catch (e) { out.innerHTML = `<span class="src-err">✕ ${esc(e.message)}</span>`; return; }
+  payload.name = document.getElementById("src-name").value.trim() || payload.type;
+
+  out.innerHTML = '<span class="src-pending">… fetching</span>';
+  const d = await post("/api/sources/test", payload);
+  if (!d?.success) {
+    out.innerHTML = `<span class="src-err">✕ ${esc(d?.error || "failed")}</span>`;
+    return;
+  }
+  out.innerHTML = `<span class="src-ok">✓ ${d.count} item(s)</span>
+    <div class="src-sample">${Object.entries(d.tokens).map(([k, v]) =>
+      `<div><span class="var-tok">{${esc(k)}}</span><span class="var-val">${esc(v)}</span></div>`).join("")}</div>`;
+}
+
+async function addSource() {
+  let payload;
+  try { payload = collectSourceConfig(); }
+  catch (e) { toast(e.message, "err"); return; }
+  payload.name = document.getElementById("src-name").value.trim() || payload.type;
+  payload.interval = parseFloat(document.getElementById("src-interval").value || 300);
+  const rot = document.getElementById("src-rotate");
+  if (rot) payload.rotate_every = parseFloat(rot.value || 10);
+
+  const d = await post("/api/sources", payload);
+  if (d?.success) {
+    toast("Source added: " + payload.name, "ok");
+    await loadSources();
+    setTimeout(loadEditorData, 1500);   // let it fetch, then refresh the chips
+  } else {
+    toast(d?.error || "Failed", "err");
+  }
+}
+
+async function toggleSource(id, enabled) {
+  await put("/api/sources/" + id, {enabled});
+  loadSources();
+}
+
+async function delSource(id) {
+  await del("/api/sources/" + id);
+  await loadSources();
+  loadEditorData();
+}
+
+async function refreshSources() {
+  await post("/api/sources/refresh");
+  toast("Refreshing all sources…");
+  setTimeout(() => { loadSources(); loadEditorData(); }, 2000);
+}

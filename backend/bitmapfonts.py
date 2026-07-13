@@ -11,6 +11,8 @@ Glyphs are authored as ASCII art ('#' = dot on) so they can be eyeballed and
 corrected in the source. render_text() turns a string into a numpy bitmap.
 """
 
+import unicodedata
+
 import numpy as np
 
 # ── 5x7 — the workhorse. Full printable ASCII. ────────────────────
@@ -182,6 +184,19 @@ _G3 = {
 }
 
 
+# RSS headlines and API text are littered with smart quotes and dashes that
+# have no place in a 5x7 cell. Map them to the nearest ASCII rather than
+# printing "?" in the middle of a headline.
+_PUNCT = {
+    "\u2014": "-", "\u2013": "-", "\u2212": "-", "\u2010": "-", "\u2011": "-",
+    "\u2018": "'", "\u2019": "'", "\u201b": "'", "\u02bc": "'",
+    "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u00ab": '"', "\u00bb": '"',
+    "\u2022": ".", "\u00b7": ".", "\u2027": ".",
+    "\u00a0": " ", "\u2009": " ", "\u200a": " ", "\u202f": " ",
+    "\u2044": "/", "\u00d7": "x",
+}
+
+
 def _compile(glyphs, w, h):
     """ASCII art -> {char: (h, w) uint8 array}."""
     out = {}
@@ -208,7 +223,27 @@ class BitmapFont:
     def glyph(self, ch):
         if self.upper_only:
             ch = ch.upper()
-        return self._glyphs.get(ch, self._fallback)
+        g = self._glyphs.get(ch)
+        if g is not None:
+            return g
+
+        # Feeds are full of typographic punctuation that has no 5x7 glyph.
+        sub = _PUNCT.get(ch)
+        if sub is not None:
+            return self._glyphs.get(sub, self._fallback)
+
+        # Real data is full of accents — USGS reports quakes in "Guánica" and
+        # "Bāmyān". A 5x7 cell has no room for diacritics, so fold to the base
+        # letter: "GUANICA" is right, "GU?NICA" is just broken.
+        folded = unicodedata.normalize("NFKD", ch)
+        for c in folded:
+            if unicodedata.combining(c):
+                continue
+            key = c.upper() if self.upper_only else c
+            g = self._glyphs.get(key)
+            if g is not None:
+                return g
+        return self._fallback
 
     def scale_for_height(self, px):
         """Largest integer scale whose rendered height fits within px."""

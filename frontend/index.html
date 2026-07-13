@@ -56,7 +56,8 @@
     <nav class="tabs">
       <button class="tab active" data-tab="sequencer">SEQUENCER</button>
       <button class="tab" data-tab="compose">COMPOSE</button>
-      <button class="tab" data-tab="variables">VARIABLES</button>
+      <button class="tab" data-tab="sources">DATA</button>
+      <button class="tab" data-tab="variables">TOKENS</button>
       <button class="tab" data-tab="effects">EFFECTS</button>
       <button class="tab" data-tab="settings">SETTINGS</button>
     </nav>
@@ -109,41 +110,60 @@
       </div>
     </div>
 
-    <!-- VARIABLES -->
+    <!-- DATA SOURCES -->
+    <div class="pane" id="pane-sources">
+      <div class="pane-body wide">
+        <div class="sh">DATA SOURCES
+          <span class="sh-note">each one becomes a set of {tokens} you can drop into any text or dashboard zone</span>
+          <button class="btn btn-outline btn-sm" style="float:right"
+                  onclick="refreshSources()">↻ REFRESH ALL</button>
+        </div>
+        <div id="src-list"></div>
+
+        <div class="sh" style="margin-top:1.5rem">ADD A SOURCE</div>
+        <div class="fg">
+          <div class="ff">
+            <label class="fl">TYPE</label>
+            <select id="src-type" class="fi"></select>
+          </div>
+        </div>
+        <div id="src-form"></div>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" onclick="testSource()">TEST FETCH</button>
+          <button class="btn btn-solid btn-sm" onclick="addSource()">+ ADD SOURCE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOKENS -->
     <div class="pane" id="pane-variables">
       <div class="pane-body">
-        <div class="sh">LIVE VARIABLES <span class="sh-note">use these as {tokens} in any text</span></div>
-        <div class="fg">
-          <div class="ff-wide">
-            <label class="fl">OPENWEATHERMAP API KEY</label>
-            <input type="text" id="var-key" class="fi" placeholder="Free key at openweathermap.org">
-          </div>
-          <div class="ff">
-            <label class="fl">CITY</label>
-            <input type="text" id="var-city" class="fi" placeholder="San Francisco">
-          </div>
-          <div class="ff">
-            <label class="fl">UNITS</label>
-            <select id="var-units" class="fi">
-              <option value="imperial">Fahrenheit</option>
-              <option value="metric">Celsius</option>
-            </select>
-          </div>
-          <div class="ff-wide">
-            <label class="fl">RSS FEED URL</label>
-            <input type="text" id="var-rss" class="fi" placeholder="https://feeds.bbci.co.uk/news/rss.xml">
-          </div>
-          <div class="ff">
-            <label class="fl">UPDATE INTERVAL (s)</label>
-            <input type="number" id="var-interval" class="fi" value="300" min="30">
-          </div>
+        <div class="sh">TOKENS
+          <span class="sh-note">live values you can use anywhere — with filters like |upper |trunc:20 |round:0</span>
+          <button class="btn btn-outline btn-sm" style="float:right"
+                  onclick="refreshVarGrid()">↻</button>
         </div>
-        <div class="btn-row">
-          <button class="btn btn-solid btn-sm" onclick="saveVars()">SAVE</button>
-          <button class="btn btn-outline btn-sm" onclick="refreshVarGrid()">↻ REFRESH</button>
-        </div>
-        <div class="sh" style="margin-top:1.25rem">CURRENT VALUES</div>
         <div id="var-grid" class="var-grid"></div>
+
+        <div class="sh" style="margin-top:1.5rem">TRY IT</div>
+        <div class="ff">
+          <input type="text" id="var-test" class="fi"
+                 placeholder="M{quake_mag} {quake_place|upper|trunc:24}">
+        </div>
+        <div class="var-preview" id="var-test-out"></div>
+        <div class="btn-row">
+          <button class="btn btn-outline btn-sm" onclick="testToken()">PREVIEW</button>
+        </div>
+
+        <div class="sh" style="margin-top:1.5rem">FILTERS</div>
+        <div class="filter-help">
+          <div><code>|upper</code> <code>|lower</code> <code>|title</code> — change case</div>
+          <div><code>|trunc:24</code> — cut to 24 chars with an ellipsis (fit it on the panel)</div>
+          <div><code>|round:0</code> <code>|int</code> <code>|abs</code> — numbers</div>
+          <div><code>|pad:8</code> <code>|padl:8</code> — pad right / left, for lining up columns</div>
+          <div><code>|fmt:%H:%M</code> — format a time, e.g. <code>{now|fmt:%I:%M %p}</code></div>
+          <div><code>|default:NONE</code> — what to show when the value is missing</div>
+        </div>
       </div>
     </div>
 
@@ -223,6 +243,7 @@
 <div id="toasts"></div>
 
 <script src="js/core.js"></script>
+<script src="js/layout.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/sequencer.js"></script>
 <script src="js/app.js"></script>
