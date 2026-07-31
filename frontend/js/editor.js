@@ -29,12 +29,22 @@ function allTokens() {
 }
 
 const MOTIONS = [
-  ["static",       "Static"],
-  ["scroll_left",  "Scroll ←"],
-  ["scroll_right", "Scroll →"],
-  ["scroll_up",    "Scroll ↑"],
-  ["scroll_down",  "Scroll ↓"],
+  ["static",          "Static"],
+  ["scroll_left",     "Scroll ← (loop)"],
+  ["scroll_right",    "Scroll → (loop)"],
+  ["scroll_up",       "Scroll ↑ (loop)"],
+  ["scroll_down",     "Scroll ↓ (loop)"],
+  ["scroll_in_left",  "Scroll ← & stop"],
+  ["scroll_in_right", "Scroll → & stop"],
+  ["scroll_in_up",    "Scroll ↑ & stop"],
+  ["scroll_in_down",  "Scroll ↓ & stop"],
 ];
+
+// Which knobs a motion actually uses. A looping scroll needs a gap between
+// passes and can't blink; a one-shot entrance is the other way round.
+const isMoving  = m => m !== "static";
+const isLooping = m => m.startsWith("scroll_") && !m.startsWith("scroll_in_");
+const canBlink  = m => m === "static" || m.startsWith("scroll_in_");
 
 const TRANSITIONS = [
   ["",               "None"],
@@ -59,7 +69,7 @@ function defaultSpec(kind = "text") {
     kind: "text", text: "", font: "px5x7", size: 14,
     align: "center", valign: "middle", dx: 0, dy: 0,
     tracking: 1, leading: 1, bold: false,
-    motion: "static", speed: 30, gap: 84, blink: 0,
+    motion: "static", speed: 30, gap: 84, blink: 0, blink_duty: 0.5,
   };
 }
 
@@ -183,7 +193,9 @@ class ContentEditor {
   // ── text ────────────────────────────────────────────────────────
   _textFields(el) {
     const s = this.spec;
-    const scrolling = s.motion !== "static";
+    const moving  = isMoving(s.motion);
+    const looping = isLooping(s.motion);
+    const blinks  = canBlink(s.motion);
 
     el.innerHTML = `
       <label class="fl">MESSAGE</label>
@@ -227,22 +239,25 @@ class ContentEditor {
               `<option value="${m}" ${m === s.motion ? "selected" : ""}>${label}</option>`).join("")}
           </select>
         </div>
-        <div class="ff ${scrolling ? "" : "ff-off"}">
+        <div class="ff ${moving ? "" : "ff-off"}">
           <label class="fl">SPEED <span class="rv" id="v-speed">${s.speed} px/s</span></label>
           <input type="range" id="e-speed" min="5" max="120" step="1"
-                 value="${s.speed}" ${scrolling ? "" : "disabled"}>
+                 value="${s.speed}" ${moving ? "" : "disabled"}>
         </div>
-        <div class="ff ${scrolling ? "" : "ff-off"}">
+        <div class="ff ${looping ? "" : "ff-off"}">
           <label class="fl">LOOP GAP <span class="rv" id="v-gap">${s.gap}px</span></label>
           <input type="range" id="e-gap" min="0" max="200" step="4"
-                 value="${s.gap}" ${scrolling ? "" : "disabled"}>
+                 value="${s.gap}" ${looping ? "" : "disabled"}>
         </div>
-        <div class="ff ${scrolling ? "ff-off" : ""}">
+        <div class="ff ${blinks ? "" : "ff-off"}">
           <label class="fl">BLINK <span class="rv" id="v-blink">${s.blink ? s.blink + " Hz" : "off"}</span></label>
           <input type="range" id="e-blink" min="0" max="5" step="0.5"
-                 value="${s.blink}" ${scrolling ? "disabled" : ""}>
+                 value="${s.blink}" ${blinks ? "" : "disabled"}>
         </div>
       </div>
+      ${moving && !looping ? `<div class="ed-note">Slides in, stops on the
+        ${esc(s.align)}/${esc(s.valign)} mark, and stays there. Set H ALIGN to
+        center for dead centre.</div>` : ""}
 
       <details class="ed-adv">
         <summary>FINE TUNING</summary>
@@ -262,6 +277,12 @@ class ContentEditor {
           <div class="ff">
             <label class="fl">LINE SPACING <span class="rv" id="v-leading">${s.leading}</span></label>
             <input type="range" id="e-leading" min="0" max="10" step="1" value="${s.leading}">
+          </div>
+          <div class="ff">
+            <label class="fl">BLINK ON-TIME
+              <span class="rv" id="v-duty">${Math.round((s.blink_duty ?? 0.5) * 100)}%</span></label>
+            <input type="range" id="e-duty" min="0.1" max="0.9" step="0.05"
+                   value="${s.blink_duty ?? 0.5}">
           </div>
           <div class="ff">
             <label class="cb-row">
@@ -320,6 +341,7 @@ class ContentEditor {
     bind("speed",    "speed",    Number, v => v + " px/s");
     bind("gap",      "gap",      Number, v => v + "px");
     bind("blink",    "blink",    Number, v => v ? v + " Hz" : "off");
+    bind("duty",     "blink_duty", Number, v => Math.round(v * 100) + "%");
     bind("dx",       "dx",       Number);
     bind("dy",       "dy",       Number);
     bind("tracking", "tracking", Number);

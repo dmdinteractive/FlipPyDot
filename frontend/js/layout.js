@@ -32,7 +32,7 @@ function defaultZone(type, w, h) {
     x: 2, y: 2, w: Math.max(20, w - 4), h: 14,
     text: "{time_hm}", font: "px5x7", size: 14,
     align: "left", valign: "middle",
-    motion: "static", speed: 30, gap: 16,
+    motion: "static", speed: 30, gap: 16, blink: 0, blink_duty: 0.5,
     tracking: 1, leading: 1, bold: false, dx: 0, dy: 0,
     enabled: true,
   };
@@ -445,7 +445,12 @@ class LayoutEditor {
           <div class="ff">
             <label class="fl">SPEED <span class="rv" id="lv-speed">${z.speed}</span></label>
             <input type="range" id="lp-speed" min="5" max="120" value="${z.speed}"
-                   ${z.motion === "static" ? "disabled" : ""}>
+                   ${isMoving(z.motion) ? "" : "disabled"}>
+          </div>
+          <div class="ff">
+            <label class="fl">BLINK <span class="rv" id="lv-blink">${z.blink ? z.blink + " Hz" : "off"}</span></label>
+            <input type="range" id="lp-blink" min="0" max="5" step="0.5" value="${z.blink || 0}"
+                   ${canBlink(z.motion) ? "" : "disabled"}>
           </div>
         </div>
         <details class="ed-adv">
@@ -461,7 +466,14 @@ class LayoutEditor {
             </div>
             <div class="ff">
               <label class="fl">LOOP GAP <span class="rv" id="lv-gap">${z.gap}</span></label>
-              <input type="range" id="lp-gap" min="0" max="120" value="${z.gap}">
+              <input type="range" id="lp-gap" min="0" max="120" value="${z.gap}"
+                     ${isLooping(z.motion) ? "" : "disabled"}>
+            </div>
+            <div class="ff">
+              <label class="fl">BLINK ON-TIME
+                <span class="rv" id="lv-duty">${Math.round((z.blink_duty ?? 0.5) * 100)}%</span></label>
+              <input type="range" id="lp-duty" min="0.1" max="0.9" step="0.05"
+                     value="${z.blink_duty ?? 0.5}">
             </div>
             <div class="ff">
               <label class="cb-row"><input type="checkbox" id="lp-bold" ${z.bold ? "checked" : ""}> BOLD</label>
@@ -521,6 +533,8 @@ class LayoutEditor {
     bind("valign", "valign");
     bind("motion", "motion", v => v, null, true);
     bind("speed", "speed", Number);
+    bind("blink", "blink", Number, v => v ? v + " Hz" : "off");
+    bind("duty", "blink_duty", Number, v => Math.round(v * 100) + "%");
     bind("tracking", "tracking", Number);
     bind("leading", "leading", Number);
     bind("gap", "gap", Number);

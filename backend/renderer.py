@@ -8,7 +8,12 @@ through identical code and cannot drift apart.
 
     {"kind": "text",  "text": "OPEN {time}", "font": "px5x7", "size": 14,
      "align": "center", "valign": "middle", "motion": "scroll_left",
-     "speed": 30, "gap": 84, "invert": false, "blink": 0}
+     "speed": 30, "gap": 84, "invert": false, "blink": 0, "blink_duty": 0.5}
+
+Motion is either a looping scroll (scroll_left/right/up/down), which runs
+forever, or a one-shot entrance (scroll_in_left/right/up/down), which slides
+the text in from off-panel and parks it on its alignment mark. "blink" is a
+rate in Hz and applies to text that is standing still — static or landed.
 
     {"kind": "animation", "animation": "bounce_balls", "params": {...}}
     {"kind": "image", "frames": [{"bitmap": [[...]], "duration": 80}]}
@@ -37,6 +42,10 @@ log = logging.getLogger(__name__)
 # drops frames on the serial line.
 MAX_FPS = 30
 MIN_DELAY = 1.0 / MAX_FPS
+
+# One-shot entrances, as opposed to the scroll_* motions that run forever.
+SCROLL_IN_MOTIONS = ("scroll_in_left", "scroll_in_right",
+                     "scroll_in_up", "scroll_in_down")
 
 
 # ── helpers ───────────────────────────────────────────────────────
@@ -88,6 +97,49 @@ def _step_and_delay(speed):
     return step, step / speed
 
 
+def _blink_times(spec):
+    """(seconds lit, seconds dark) for a blinking spec, or None if it isn't.
+
+    Rate is in Hz — whole on/off cycles per second — and duty is the share of
+    each cycle the text is lit, so "1 Hz at 0.8" reads as a message that ticks
+    rather than a strobe. Both halves are floored at the panel's own frame
+    time: a flipdot cannot flip faster than that, and asking it to only costs
+    serial bandwidth and makes noise.
+    """
+    hz = float(spec.get("blink", 0) or 0)
+    if hz <= 0:
+        return None
+    duty   = min(0.9, max(0.1, float(spec.get("blink_duty", 0.5) or 0.5)))
+    period = 1.0 / hz
+    return max(MIN_DELAY, period * duty), max(MIN_DELAY, period * (1.0 - duty))
+
+
+def _blink_on(elapsed, hz, duty=0.5):
+    """Is a blinking zone lit at `elapsed` seconds? Phase, not edges — the
+    layout renderer samples a clock rather than emitting a frame per state."""
+    duty = min(0.9, max(0.1, float(duty or 0.5)))
+    return (float(elapsed) * float(hz)) % 1.0 < duty
+
+
+def _aligned_xy(bw, bh, w, h, align, valign, dx, dy):
+    """Where compose() would land a bw x bh bitmap on a w x h canvas."""
+    if   align == "left":   x = 0
+    elif align == "right":  x = w - bw
+    else:                   x = (w - bw) // 2
+    if   valign == "top":    y = 0
+    elif valign == "bottom": y = h - bh
+    else:                    y = (h - bh) // 2
+    return x + int(dx), y + int(dy)
+
+
+def _approach(start, end, travelled):
+    """One-shot slide position, clamped at the destination. Clamping is the
+    whole feature: the text has to stop exactly on its mark, not drift past."""
+    if end >= start:
+        return int(min(end, start + travelled))
+    return int(max(end, start - travelled))
+
+
 def render_text_bitmap(spec):
     """The text of a spec as a tight bitmap, with {variables} substituted."""
     text = substitute(str(spec.get("text", "")))
@@ -104,6 +156,60 @@ def render_text_bitmap(spec):
 
 
 # ── text ──────────────────────────────────────────────────────────
+def _settle(frame, w, h, blink_t, repeat):
+    """The end state of a piece of text: held on screen, or blinking.
+
+    `repeat=False` yields one on/off pair and returns. The player restarts a
+    generator that finishes, so static blink keeps going for free and its
+    preview stays two frames instead of hundreds. A scroll-in has to blink
+    forever instead — letting that generator end would restart the entrance.
+    """
+    if not blink_t:
+        yield frame, None
+        return
+    on, off = blink_t
+    while True:
+        yield frame, on
+        yield blank(w, h), off
+        if not repeat:
+            return
+
+
+def _scroll_in_frames(spec, bmp, w, h, align, valign, dx, dy, blink_t):
+    """Slide text in from off-panel and stop on its alignment mark.
+
+    The last frame is pixel-identical to what a static spec with the same
+    alignment would draw, so a message can arrive with movement and then just
+    sit there and be read — which a looping scroll can never do.
+    """
+    motion  = spec.get("motion")
+    bh, bw  = bmp.shape
+    fx, fy  = _aligned_xy(bw, bh, w, h, align, valign, dx, dy)
+    step, delay = _step_and_delay(spec.get("speed", 30))
+
+    vertical = motion in ("scroll_in_up", "scroll_in_down")
+    if   motion == "scroll_in_left":  start, end = w, fx      # enters at the right edge
+    elif motion == "scroll_in_right": start, end = -bw, fx
+    elif motion == "scroll_in_up":    start, end = h, fy
+    else:                             start, end = -bh, fy
+
+    direction = 1 if end > start else -1
+    pos = start
+    while (pos - end) * direction < 0:
+        frame = blank(w, h)
+        if vertical:
+            compose(frame, bmp, "left", "top", fx, pos)
+        else:
+            compose(frame, bmp, "left", "top", pos, fy)
+        yield frame, delay
+        pos += direction * step
+        if (pos - end) * direction > 0:
+            pos = end                      # never overshoot the mark
+
+    final = compose(blank(w, h), bmp, "left", "top", fx, fy)
+    yield from _settle(final, w, h, blink_t, repeat=True)
+
+
 def _text_frames(spec, w, h):
     bmp    = render_text_bitmap(spec)
     motion = spec.get("motion", "static")
@@ -111,7 +217,7 @@ def _text_frames(spec, w, h):
     valign = spec.get("valign", "middle")
     dx     = int(spec.get("dx", 0))
     dy     = int(spec.get("dy", 0))
-    blink  = float(spec.get("blink", 0) or 0)
+    blink_t = _blink_times(spec)
 
     if bmp.shape[1] == 0:
         yield blank(w, h), None
@@ -119,12 +225,11 @@ def _text_frames(spec, w, h):
 
     if motion == "static":
         frame = compose(blank(w, h), bmp, align, valign, dx, dy)
-        if blink > 0:
-            half = max(MIN_DELAY, 1.0 / (2 * blink))
-            yield frame, half
-            yield blank(w, h), half
-        else:
-            yield frame, None
+        yield from _settle(frame, w, h, blink_t, repeat=False)
+        return
+
+    if motion in SCROLL_IN_MOTIONS:
+        yield from _scroll_in_frames(spec, bmp, w, h, align, valign, dx, dy, blink_t)
         return
 
     horizontal = motion in ("scroll_left", "scroll_right")
@@ -324,6 +429,10 @@ def _draw_zone(canvas, zone, w, h, elapsed):
         return
 
     # text
+    blink = float(zone.get("blink", 0) or 0)
+    if blink > 0 and not _blink_on(elapsed, blink, zone.get("blink_duty", 0.5)):
+        return                    # dark half of the cycle — draw nothing
+
     resolved = substitute(str(zone.get("text", "")))
     if not resolved:
         return
@@ -342,6 +451,22 @@ def _draw_zone(canvas, zone, w, h, elapsed):
 
     speed = max(1.0, float(zone.get("speed", 30)))
     bh, bw = bmp.shape
+
+    if motion in SCROLL_IN_MOTIONS:
+        # Positions here are relative to the zone box, not the panel, so a
+        # headline slides into its own box and stops there.
+        travelled = elapsed * speed
+        if motion in ("scroll_in_left", "scroll_in_right"):
+            fx = 0 if align == "left" else (zw - bw if align == "right" else (zw - bw) // 2)
+            start = zw if motion == "scroll_in_left" else -bw
+            _blit_clipped(canvas, bmp, box, "left", valign,
+                          _approach(start, fx + dx, travelled), dy)
+        else:
+            fy = 0 if valign == "top" else (zh - bh if valign == "bottom" else (zh - bh) // 2)
+            start = zh if motion == "scroll_in_up" else -bh
+            _blit_clipped(canvas, bmp, box, align, "top", dx,
+                          _approach(start, fy + dy, travelled))
+        return
 
     if motion in ("scroll_left", "scroll_right"):
         gap     = int(zone.get("gap", max(8, zw)))
@@ -372,9 +497,18 @@ def _layout_fps(spec):
     """Fast enough for the fastest scrolling zone; otherwise just fast enough
     that a ticking clock lands within a fraction of a second of the real one.
     The player drops duplicate frames, so a slow layout costs no serial time."""
-    speeds = [float(z.get("speed", 30)) for z in spec.get("zones", [])
-              if z.get("type", "text") == "text"
-              and z.get("motion", "static") != "static"]
+    texts  = [z for z in spec.get("zones", []) if z.get("type", "text") == "text"]
+    speeds = [float(z.get("speed", 30)) for z in texts
+              if z.get("motion", "static") != "static"]
+    # A blink is sampled from the clock, so the frame rate has to out-run its
+    # SHORTER half or that half falls between two frames and never shows —
+    # an 80%-duty blink sampled 4x a second simply stays lit forever.
+    for z in texts:
+        hz = float(z.get("blink", 0) or 0)
+        if hz <= 0:
+            continue
+        duty  = min(0.9, max(0.1, float(z.get("blink_duty", 0.5) or 0.5)))
+        speeds.append(2.0 * hz / min(duty, 1.0 - duty))
     if not speeds:
         return 4.0
     return max(4.0, min(MAX_FPS, max(speeds)))
