@@ -28,8 +28,17 @@ TICK = 0.02
 
 
 # While an effect is running, static content still has to be re-sent for the
-# effect to animate over it. This is that refresh rate.
+# effect to animate over it. This is that refresh rate — capped by what the
+# wire can actually carry, because an effect sets _last_sent to None on every
+# frame (below) and so gives up the duplicate-frame optimisation entirely. At
+# 20 fps against a 10 fps link, a flicker over static text would on its own
+# put the panel permanently behind.
 FX_FPS = 20
+
+
+def _fx_delay():
+    """Effect refresh interval, never faster than the panel can be driven."""
+    return 1.0 / max(1.0, min(FX_FPS, renderer.MAX_FPS))
 
 
 class Player:
@@ -96,6 +105,7 @@ class Player:
                 for frame, delay in renderer.frames(spec, w, h):
                     if not self._current(gen):
                         return
+                    t0 = time.time()
                     self._emit(frame)
                     produced = True
 
@@ -105,7 +115,12 @@ class Player:
                         if not self._hold(frame, deadline, gen):
                             return
                         break
-                    if not self._sleep(delay, gen):
+
+                    # Charge the write against the frame delay. Sleeping the
+                    # full delay AFTER a blocking write makes the real period
+                    # (write + delay), so a link running at its limit drifts
+                    # further behind on every frame instead of holding rate.
+                    if not self._sleep(max(0.0, delay - (time.time() - t0)), gen):
                         return
                     if deadline and time.time() >= deadline:
                         return
@@ -180,7 +195,7 @@ class Player:
                 return True
             if self._effects is not None and self._effects.any_active:
                 self._emit(frame)
-                if not self._sleep(1.0 / FX_FPS, gen):
+                if not self._sleep(_fx_delay(), gen):
                     return False
             else:
                 time.sleep(TICK)

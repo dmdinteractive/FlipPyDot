@@ -38,10 +38,42 @@ from animations import get_animation
 
 log = logging.getLogger(__name__)
 
-# Flipdot panels physically cannot flip faster than this; asking for more just
-# drops frames on the serial line.
-MAX_FPS = 30
+# The panel runs at the LOWER of two independent ceilings, which is why this
+# is derived at connect time rather than hardcoded:
+#
+#   MECHANICAL — how fast the discs themselves can physically flip.
+#   TRANSPORT  — how fast one full frame fits down the serial link.
+#                (baud / 10 bits-per-byte) / (modules * BYTES_PER_MODULE)
+#
+# For 18 modules at 57600 baud that is 576 bytes against 5760 bytes/sec — 10
+# fps, a third of the mechanical limit. Transport is the binding constraint on
+# any display of this size, and it is NOT self-correcting: pyserial's write()
+# blocks rather than discarding, so frames the wire can't carry pile up in the
+# driver buffer and the panel falls progressively further behind real time.
+MECHANICAL_MAX_FPS = 30
+BYTES_PER_MODULE   = 32          # 0x80, cmd, addr, 28 data bytes, 0x8F
+
+# Conservative default until Display.connect() reports the real geometry —
+# matches an 18-module 57600-baud sign, the configuration this ships for.
+MAX_FPS   = 10.0
 MIN_DELAY = 1.0 / MAX_FPS
+
+
+def transport_fps(baud, modules):
+    """Full frames/sec the serial link can actually carry."""
+    return (float(baud) / 10.0) / (max(1, int(modules)) * BYTES_PER_MODULE)
+
+
+def set_frame_limit(baud, modules):
+    """Pin the render rate to the lower ceiling. Called on every connect."""
+    global MAX_FPS, MIN_DELAY
+    wire      = transport_fps(baud, modules)
+    MAX_FPS   = max(1.0, min(float(MECHANICAL_MAX_FPS), wire))
+    MIN_DELAY = 1.0 / MAX_FPS
+    log.info(f"Frame limit {MAX_FPS:.1f} fps "
+             f"(mechanical {MECHANICAL_MAX_FPS}, wire {wire:.1f} "
+             f"@ {baud} baud / {modules} modules)")
+    return MAX_FPS
 
 # One-shot entrances, as opposed to the scroll_* motions that run forever.
 SCROLL_IN_MOTIONS = ("scroll_in_left", "scroll_in_right",

@@ -8,6 +8,12 @@ import time
 import logging
 import numpy as np
 
+try:
+    from serial import SerialTimeoutException
+except Exception:                    # pyserial absent — this path can't fire
+    class SerialTimeoutException(Exception):
+        pass
+
 log = logging.getLogger(__name__)
 
 
@@ -26,6 +32,11 @@ class Display:
         self.connect_error = None
         self._running      = False
         self._thread       = None
+
+    @property
+    def module_count(self):
+        """Physical modules in the layout — the unit the wire budget is in."""
+        return sum(len(row) for row in self.layout) or 1
 
     def start(self):
         self._running = True
@@ -55,7 +66,8 @@ class Display:
             ser   = serial.Serial(
                 port=self.port, baudrate=self.baud,
                 bytesize=serial.EIGHTBITS, parity=serial.PARITY_NONE,
-                stopbits=serial.STOPBITS_ONE, timeout=1.0)
+                stopbits=serial.STOPBITS_ONE, timeout=1.0,
+                write_timeout=2.0)
             panel = Panel(self.layout, 28, 7,
                           module_rotation=0, screen_preview=False)
             with self._lock:
@@ -67,6 +79,12 @@ class Display:
                 self.connected    = True
                 self.connect_error= None
             log.info(f"Connected: {self.port} @ {self.baud} — {self.W}x{self.H}")
+
+            # The wire budget depends on module count and baud, both of which
+            # are only known now, so the render rate is set here rather than
+            # being a constant somebody has to keep in sync by hand.
+            import renderer
+            renderer.set_frame_limit(self.baud, self.module_count)
         except Exception as e:
             self.connect_error = str(e)
             self.connected     = False
@@ -103,6 +121,11 @@ class Display:
                     raw = bytes(data)
                 self._ser.write(raw)
                 return True
+            except SerialTimeoutException:
+                # The link is fine, we just outran it. Discarding is correct:
+                # the next frame is more current than the one we'd be queueing.
+                log.warning("Serial write timed out — frame dropped")
+                return False
             except Exception as e:
                 log.warning(f"Send failed: {e}")
                 self.connected = False

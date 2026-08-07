@@ -70,8 +70,22 @@ sudo chown root:wheel "$DAEMON"
 sudo chmod 644 "$DAEMON"
 rm -f "$TMP_PLIST"
 
+# bootout is asynchronous — it returns before launchd has finished tearing the
+# job down, so an immediate bootstrap races it and fails with EIO ("Bootstrap
+# failed: 5: Input/output error") on every re-run. Wait for the label to
+# actually leave the system domain first.
 sudo launchctl bootout system/com.flipdot 2>/dev/null || true
-sudo launchctl bootstrap system "$DAEMON"
+for _ in $(seq 1 50); do
+  sudo launchctl print system/com.flipdot >/dev/null 2>&1 || break
+  sleep 0.2
+done
+
+if ! sudo launchctl bootstrap system "$DAEMON"; then
+  # Still wedged: the job is loaded from the plist we just wrote, so restarting
+  # it in place is equivalent and always available.
+  echo "        bootstrap raced — restarting existing job instead"
+  sudo launchctl kickstart -k system/com.flipdot
+fi
 echo "        Service installed — starts at power-on, no login required"
 
 case "$DIR" in
