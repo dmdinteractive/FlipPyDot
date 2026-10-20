@@ -1,5 +1,5 @@
 """
-app.py — FlipDot Console V8
+app.py — FlipDot Console V9
 
 Everything that can go on the panel is a "spec" (see backend/renderer.py).
 The same spec drives live preview in the browser, a one-off send, and a step in
@@ -12,12 +12,13 @@ import sys
 import time
 import json
 import uuid
+import threading
 import logging
 import logging.handlers
 from datetime import datetime
 
 import numpy as np
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
 import serial
 
@@ -50,7 +51,7 @@ layout     = cfg_mod.load("layout")
 PORT = os.environ.get("FLIPDOT_PORT", device_cfg.get("port", "/dev/cu.usbserial-BG01DCHX"))
 BAUD = int(os.environ.get("FLIPDOT_BAUD", device_cfg.get("baud_rate", 57600)))
 
-from display   import Display
+from display   import Display, WRITE_MODES, MAX_BUSES
 from effects   import EffectsEngine, EFFECTS_REGISTRY
 from player    import Player
 from sequencer import Sequencer, Step, Overlay
@@ -58,7 +59,9 @@ from animations      import list_animations
 from image_processor import process_image, frames_to_json
 from variables       import substitute, get_all_values, get_status as var_status
 from wizard          import PanelWizard
+from sms             import SMSInbox
 import renderer
+import textfx
 import fonts       as font_mod
 import variables   as var_mod
 import datasources as ds
@@ -66,7 +69,26 @@ import show        as show_mgr
 
 show_mgr.SHOWS_DIR = SHOWS_DIR
 
-display = Display(PORT, BAUD, layout)
+
+def hardware_cfg():
+    """Hardware settings, upgraded in place from the V8 single-port config."""
+    c = cfg_mod.load("config")
+    buses = c.get("buses") or [{"port": c.get("port", PORT),
+                                "baud": int(c.get("baud_rate", BAUD))}]
+    if os.environ.get("FLIPDOT_PORT"):
+        buses[0]["port"] = PORT
+    return {
+        "buses":      buses,
+        "bus_map":    c.get("bus_map"),
+        "write_mode": c.get("write_mode", "immediate"),
+        "max_fps":    float(c.get("max_fps", 20)),
+    }
+
+
+_hw = hardware_cfg()
+display = Display(layout, _hw["buses"], bus_map=_hw["bus_map"],
+                  write_mode=_hw["write_mode"], max_fps=_hw["max_fps"])
+renderer.set_render_fps(display.max_fps)
 
 
 def size():
@@ -76,7 +98,43 @@ def size():
 effects   = EffectsEngine()
 player    = Player(display, size, effects=effects)
 sequencer = Sequencer(player)
-wizard    = PanelWizard(lambda: display._ser, total=18)
+wizard    = PanelWizard(display.write_raw_all, total=display.module_count)
+
+sms = SMSInbox(lambda: cfg_mod.load("sms"), lambda d: cfg_mod.save("sms", d))
+sequencer.interrupt_ready   = lambda: sms.pending() and not display.paused
+sequencer.interrupt_pending = lambda: (sms.pending() and not display.paused
+                                       and sms.cfg.get("when") == "interrupt")
+sequencer.interrupt_next    = lambda: sms.next_specs(*size())
+
+
+def _sms_idle_loop():
+    """Messages still appear when the playlist isn't running: play them
+    directly, then put back whatever was on the panel — unless someone has
+    played something else in the meantime, in which case theirs stays."""
+    while True:
+        try:
+            time.sleep(0.5)
+            if sequencer.running or display.paused or not sms.pending():
+                continue
+            before = player.current
+            ours = None
+            while sms.pending() and not sequencer.running and not display.paused:
+                for spec, secs in sms.next_specs(*size()) or []:
+                    if sequencer.running or display.paused:
+                        break
+                    if ours is not None and player.generation != ours:
+                        before = None          # an operator took over the wall
+                    sms.skip_event.clear()
+                    ours = player.play(spec, duration=secs)
+                    if sms.skip_event.wait(secs):
+                        break
+            sms.showing = None
+            if (before and not sequencer.running and ours is not None
+                    and player.generation == ours):
+                player.play(before)
+        except Exception as e:
+            log.error(f"SMS display loop error: {e}", exc_info=True)
+            time.sleep(2)
 
 
 # ── Autosave ──────────────────────────────────────────────────────
@@ -191,25 +249,35 @@ def api_status():
         "player":    player.get_status(),
         "sequencer": sequencer.get_status(),
         "effects":   effects.get_status(),
+        "display":   display.get_status(),
+        "sms":       {k: v for k, v in sms.get_status().items() if k != "log"},
         "timestamp": datetime.now().isoformat(),
     })
 
 
 @app.route("/api/ports")
 def api_ports():
-    import serial.tools.list_ports
-    return jsonify([{"port": p.device, "description": p.description}
-                    for p in serial.tools.list_ports.comports()])
+    try:
+        import serial.tools.list_ports
+        return jsonify([{"port": p.device, "description": p.description}
+                        for p in serial.tools.list_ports.comports()])
+    except Exception as e:
+        log.warning(f"Port scan failed: {e}")
+        return jsonify([])
 
 
 @app.route("/api/connect", methods=["POST"])
 def api_connect():
+    """Connect (or reconnect) every adapter. A port in the body replaces
+    bus 1's port — the one-adapter case from V8."""
     d = body()
-    port = d.get("port", display.port)
-    baud = int(d.get("baud_rate", display.baud))
-    cfg_mod.set_value("config", "port", port)
-    cfg_mod.set_value("config", "baud_rate", baud)
-    display.reconnect(port=port, baud=baud)
+    hw = hardware_cfg()
+    if d.get("port"):
+        hw["buses"][0]["port"] = d["port"]
+    if d.get("baud_rate"):
+        hw["buses"][0]["baud"] = int(d["baud_rate"])
+    cfg_mod.set_value("config", "buses", hw["buses"])
+    display.reconnect(buses=hw["buses"])
     return jsonify({"success": display.connected, "connected": display.connected,
                     "error": display.connect_error})
 
@@ -220,9 +288,58 @@ def api_disconnect():
     return jsonify({"success": True})
 
 
+@app.route("/api/hardware")
+def api_hardware():
+    return jsonify({**hardware_cfg(), "status": display.get_status(),
+                    "write_modes": WRITE_MODES, "max_buses": MAX_BUSES})
+
+
+@app.route("/api/hardware", methods=["POST"])
+def api_hardware_save():
+    """Adapters, which controller is on which adapter, write mode, fps."""
+    d = body()
+    hw = hardware_cfg()
+    buses = d.get("buses", hw["buses"])
+    buses = [{"port": str(b.get("port", "")), "baud": int(b.get("baud", 57600))}
+             for b in buses][:MAX_BUSES] or hw["buses"]
+    mode = d.get("write_mode", hw["write_mode"])
+    fps  = float(d.get("max_fps", hw["max_fps"]))
+    bmap = d.get("bus_map", hw["bus_map"])
+    cfg_mod.set_value("config", "buses", buses)
+    cfg_mod.set_value("config", "bus_map", bmap)
+    cfg_mod.set_value("config", "write_mode", mode)
+    cfg_mod.set_value("config", "max_fps", fps)
+    # Keep the V8 keys pointing at bus 1 so rolling back to main still works.
+    cfg_mod.set_value("config", "port", buses[0]["port"])
+    cfg_mod.set_value("config", "baud_rate", buses[0]["baud"])
+    display.reconnect(buses=buses, bus_map=bmap, write_mode=mode, max_fps=fps)
+    renderer.set_render_fps(display.max_fps)
+    return jsonify({"success": True, "status": display.get_status()})
+
+
 @app.route("/api/buffer")
 def api_buffer():
-    return jsonify({"buffer": display.buffer.tolist()})
+    return jsonify({"w": display.W, "h": display.H, "f": renderer.pack(display.buffer)})
+
+
+@app.route("/api/monitor")
+def api_monitor():
+    """Server-sent events: one packed frame per change, so the browser's
+    monitor shows what the panel shows at the panel's own frame rate,
+    without polling. Plain HTTP — no websockets, no extra dependencies."""
+    def gen():
+        seq = -1
+        last_beat = time.time()
+        while True:
+            new_seq, buf = display.wait_frame(seq, timeout=5.0)
+            if new_seq != seq and buf is not None:
+                seq = new_seq
+                yield f"data: {display.W},{display.H},{renderer.pack(buf)}\n\n"
+            elif time.time() - last_beat > 15:
+                last_beat = time.time()
+                yield ": keepalive\n\n"
+    return Response(stream_with_context(gen()), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ── Preview: render a spec without touching hardware ───────────────
@@ -231,9 +348,11 @@ def api_preview():
     d = body()
     spec = d.get("spec", d)
     w, h = size()
+    dur = d.get("duration")
     try:
         frames = renderer.preview(spec, w, h,
-                                  max_frames=int(d.get("max_frames", 240)))
+                                  max_frames=int(d.get("max_frames", 400)),
+                                  duration=float(dur) if dur else None)
         return jsonify({
             "success": True,
             "frames":  frames,
@@ -243,8 +362,15 @@ def api_preview():
             "height":  h,
         })
     except Exception as e:
-        log.warning(f"Preview failed: {e}")
+        log.warning(f"Preview failed: {e}", exc_info=True)
         return jsonify({"success": False, "error": str(e)}), 400
+
+
+@app.route("/api/textfx")
+def api_textfx():
+    """What the editor can offer for letter-by-letter text animation."""
+    return jsonify({"intros": textfx.INTROS, "idles": textfx.IDLES,
+                    "outros": textfx.OUTROS, "blends": textfx.BLENDS})
 
 
 # ── Transport: play a spec right now ──────────────────────────────
@@ -658,24 +784,36 @@ def api_wizard_state():
 
 @app.route("/api/wizard/start", methods=["POST"])
 def api_wizard_start():
-    return jsonify(wizard.start(body().get("total", 18)))
+    # The wizard writes straight to the controllers; stop everything else
+    # (including the pump's periodic resync) from drawing over it.
+    sequencer.stop()
+    player.stop(clear=False)
+    display.paused = True
+    return jsonify(wizard.start(body().get("total", display.module_count)))
 
 
 @app.route("/api/wizard/assign", methods=["POST"])
 def api_wizard_assign():
     d = body()
-    return jsonify(wizard.assign(int(d["address"]), int(d["col"]),
-                                 int(d["row"]), d["half"]))
+    r = wizard.assign(int(d["address"]), int(d["col"]), int(d["row"]), d["half"])
+    if r.get("complete"):
+        display.paused = False
+    return jsonify(r)
 
 
 @app.route("/api/wizard/skip", methods=["POST"])
 def api_wizard_skip():
-    return jsonify(wizard.skip(int(body().get("address", 0))))
+    r = wizard.skip(int(body().get("address", 0)))
+    if r.get("complete"):
+        display.paused = False
+    return jsonify(r)
 
 
 @app.route("/api/wizard/stop", methods=["POST"])
 def api_wizard_stop():
-    return jsonify(wizard.stop())
+    r = wizard.stop()
+    display.paused = False
+    return jsonify(r)
 
 
 @app.route("/api/wizard/save", methods=["POST"])
@@ -685,7 +823,8 @@ def api_wizard_save():
     try:
         new_layout = wizard.build_layout()
         cfg_mod.save("layout", new_layout)
-        display.layout = new_layout
+        display.configure(layout=new_layout)
+        display.paused = False
         display.reconnect()
         log.info(f"Layout saved: {new_layout}")
         return jsonify({"success": True, "layout": new_layout})
@@ -693,14 +832,60 @@ def api_wizard_save():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
+# ── Text messages ─────────────────────────────────────────────────
+@app.route("/api/sms")
+def api_sms():
+    return jsonify({"config": sms.public_config(), **sms.get_status()})
+
+
+@app.route("/api/sms/config", methods=["POST"])
+def api_sms_config():
+    return jsonify({"success": True, "config": sms.update(body())})
+
+
+@app.route("/api/sms/test", methods=["POST"])
+def api_sms_test():
+    """Pretend a visitor texted — try the look without a phone."""
+    e = sms.receive("test", body().get("text", "Hello from the museum!"), test=True)
+    if not sms.cfg.get("enabled"):
+        return jsonify({"success": False, "error":
+                        "Messages are switched off — turn them on to see the test."})
+    return jsonify({"success": True, "entry": e})
+
+
+@app.route("/api/sms/skip", methods=["POST"])
+def api_sms_skip():
+    """Move on from the message on the panel now (it's like pressing next)."""
+    sms.skip_event.set()
+    if sequencer.running and sequencer.in_interrupt:
+        sequencer._wake.set()
+    return jsonify({"success": True})
+
+
+@app.route("/api/sms/twilio", methods=["POST"])
+def api_sms_webhook():
+    """Twilio webhook (mode = webhook). Signature-checked."""
+    if sms.cfg.get("mode") != "webhook":
+        return Response("<Response/>", mimetype="text/xml", status=404)
+    params = {k: v for k, v in request.form.items()}
+    if not sms.verify_webhook(request.url, params,
+                              request.headers.get("X-Twilio-Signature", "")):
+        log.warning("SMS webhook: bad signature — ignored")
+        return Response("<Response/>", mimetype="text/xml", status=403)
+    sms.receive(params.get("From"), params.get("Body"), sid=params.get("MessageSid"))
+    return Response("<Response/>", mimetype="text/xml")
+
+
 # ── Boot ──────────────────────────────────────────────────────────
 if __name__ == "__main__":
     log.info("=" * 52)
-    log.info("  FLIPDOT CONSOLE V8")
+    log.info("  FLIPDOT CONSOLE V9")
     log.info("=" * 52)
 
+    display.reconnect()
     display.start()
-    time.sleep(1.5)
+    sms.start()
+    threading.Thread(target=_sms_idle_loop, daemon=True, name="sms-idle").start()
 
     var_mod.configure(migrate_var_config(var_cfg))
     var_mod.start()
@@ -708,7 +893,7 @@ if __name__ == "__main__":
     load_last()
 
     log.info(f"Fonts: {', '.join(f['key'] for f in font_mod.list_fonts())}")
-    log.info("Open: http://localhost:5000")
+    log.info(f"Open: http://localhost:{os.environ.get('FLIPDOT_WEB_PORT', 5000)}")
     log.info("=" * 52)
 
     app.run(host="0.0.0.0", port=int(os.environ.get("FLIPDOT_WEB_PORT", 5000)), debug=False, threaded=True)

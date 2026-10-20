@@ -225,7 +225,7 @@ class LayoutEditor {
     if (!d?.success) return;
     this.W = d.width;
     this.H = d.height;
-    this.preview.load(d.frames);
+    this.preview.load(d.frames, d.width, d.height);
 
     const meta = this.root.querySelector("#lay-meta");
     const m = d.measure || {};
