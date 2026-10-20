@@ -59,8 +59,9 @@ function markCurrent() {
 function summarize(c) {
   if (!c) return "—";
   if (c.kind === "text") {
-    const m = c.motion && c.motion !== "static" ? " ⇄" : "";
-    return (c.text || "(empty)").slice(0, 40) + m;
+    const fx = [c.intro, c.idle, c.outro].filter(Boolean).join("·");
+    const m = fx ? `  ✦ ${fx}` : (c.motion && c.motion !== "static" ? " ⇄" : "");
+    return (c.text || "(empty)").replace(/\n/g, " ").slice(0, 40) + m + (c.bg ? ` over ${c.bg}` : "");
   }
   if (c.kind === "animation") return (c.animation || "").replace(/_/g, " ");
   if (c.kind === "image")     return `image — ${(c.frames || []).length} frame(s)`;
@@ -276,7 +277,11 @@ function openEditor(type, id) {
 
   const host = document.getElementById("drawer-content");
   stepEd?.destroy();
-  stepEd = new ContentEditor(host, {onChange: spec => { editing.model.content = spec; }});
+  stepEd = new ContentEditor(host, {
+    onChange: spec => { editing.model.content = spec; },
+    getDuration: () => parseFloat(document.getElementById("d-dur")?.value || "8"),
+  });
+  document.getElementById("d-dur").addEventListener("change", () => stepEd.refresh());
   stepEd.setSpec(model.content);
 
   drawer.classList.add("open");

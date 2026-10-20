@@ -15,6 +15,10 @@ forever, or a one-shot entrance (scroll_in_left/right/up/down), which slides
 the text in from off-panel and parks it on its alignment mark. "blink" is a
 rate in Hz and applies to text that is standing still — static or landed.
 
+V9 adds letter-by-letter animation and moving backgrounds (textfx.py):
+    "intro": "flap", "idle": "wave", "outro": "explode", "fx_speed": 1.0,
+    "bg": "plasma", "bg_blend": "outline"
+
     {"kind": "animation", "animation": "bounce_balls", "params": {...}}
     {"kind": "image", "frames": [{"bitmap": [[...]], "duration": 80}]}
     {"kind": "clear"} | {"kind": "fill"}
@@ -28,6 +32,7 @@ actually made the old scroll impossible to tune.
 """
 
 import time
+import base64
 import logging
 
 import numpy as np
@@ -35,44 +40,25 @@ import numpy as np
 import fonts as font_mod
 from variables import substitute
 from animations import get_animation
+import textfx
 
 log = logging.getLogger(__name__)
 
-# The panel runs at the LOWER of two independent ceilings, which is why this
-# is derived at connect time rather than hardcoded:
-#
-#   MECHANICAL — how fast the discs themselves can physically flip.
-#   TRANSPORT  — how fast one full frame fits down the serial link.
-#                (baud / 10 bits-per-byte) / (modules * BYTES_PER_MODULE)
-#
-# For 18 modules at 57600 baud that is 576 bytes against 5760 bytes/sec — 10
-# fps, a third of the mechanical limit. Transport is the binding constraint on
-# any display of this size, and it is NOT self-correcting: pyserial's write()
-# blocks rather than discarding, so frames the wire can't carry pile up in the
-# driver buffer and the panel falls progressively further behind real time.
-MECHANICAL_MAX_FPS = 30
-BYTES_PER_MODULE   = 32          # 0x80, cmd, addr, 28 data bytes, 0x8F
-
-# Conservative default until Display.connect() reports the real geometry —
-# matches an 18-module 57600-baud sign, the configuration this ships for.
-MAX_FPS   = 10.0
+# How often the renderer produces a new frame while something is moving.
+# This is the PANEL's flip rate (Setup → Hardware → max fps), not the wire's —
+# the display layer works out how much of each frame actually has to be sent
+# and drops anything the wire can't keep up with, so nothing ever queues.
+# See display.py for the whole story.
+MAX_FPS   = 20.0
 MIN_DELAY = 1.0 / MAX_FPS
 
 
-def transport_fps(baud, modules):
-    """Full frames/sec the serial link can actually carry."""
-    return (float(baud) / 10.0) / (max(1, int(modules)) * BYTES_PER_MODULE)
-
-
-def set_frame_limit(baud, modules):
-    """Pin the render rate to the lower ceiling. Called on every connect."""
+def set_render_fps(fps):
+    """Pin the render rate. Called whenever hardware settings change."""
     global MAX_FPS, MIN_DELAY
-    wire      = transport_fps(baud, modules)
-    MAX_FPS   = max(1.0, min(float(MECHANICAL_MAX_FPS), wire))
+    MAX_FPS   = max(1.0, min(60.0, float(fps)))
     MIN_DELAY = 1.0 / MAX_FPS
-    log.info(f"Frame limit {MAX_FPS:.1f} fps "
-             f"(mechanical {MECHANICAL_MAX_FPS}, wire {wire:.1f} "
-             f"@ {baud} baud / {modules} modules)")
+    log.info(f"Render rate {MAX_FPS:.1f} fps")
     return MAX_FPS
 
 # One-shot entrances, as opposed to the scroll_* motions that run forever.
@@ -625,8 +611,12 @@ def _fit(bmp, w, h):
 
 
 # ── entry point ───────────────────────────────────────────────────
-def frames(spec, w, h):
-    """Yield (frame, delay) for any spec. delay=None means hold indefinitely."""
+def frames(spec, w, h, duration=None):
+    """Yield (frame, delay) for any spec. delay=None means hold indefinitely.
+
+    duration is the step's on-screen time when known; text exits ("outro")
+    are timed to finish exactly at the end of it.
+    """
     spec = spec or {}
     kind = spec.get("kind", "text")
 
@@ -640,25 +630,45 @@ def frames(spec, w, h):
         yield from _anim_frames(spec, w, h)
     elif kind == "image":
         yield from _image_frames(spec, w, h)
+    elif textfx.needs_fx(spec):
+        yield from textfx.text_fx_frames(spec, w, h, duration)
     else:
         yield from _text_frames(spec, w, h)
 
 
-def preview(spec, w, h, max_frames=240):
-    """Render a spec to a bounded list of frames for the browser preview.
+def pack(frame):
+    """1-bit frame -> base64, row-major, MSB first. ~440 bytes for 84x42
+    instead of ~11 KB of nested JSON lists."""
+    return base64.b64encode(np.packbits(np.asarray(frame, dtype=np.uint8).ravel())).decode()
 
-    Never touches the display. `hold` marks a frame the player would sit on
-    rather than advance past, so the UI knows not to flicker through it.
+
+def preview(spec, w, h, max_frames=400, duration=None, seconds=30.0):
+    """Render a spec for the browser exactly as the panel will play it.
+
+    Sampled through the same Clip the player uses, at the panel's frame
+    rate, with identical consecutive frames merged. Each entry is
+    {"f": packed frame, "d": seconds on screen}; d=None is a hold.
     """
-    out = []
-    for frame, delay in frames(spec, w, h):
-        out.append({
-            "bitmap": frame.astype(int).tolist(),
-            "delay":  None if delay is None else round(float(delay), 4),
-            "hold":   delay is None,
-        })
-        if len(out) >= max_frames:
+    from clip import Clip
+    clip = Clip(spec, w, h, loop=True, duration=duration)
+    end = float(duration) if duration else float(seconds)
+    step = 1.0 / MAX_FPS
+    out, t = [], 0.0
+    while t < end and len(out) < max_frames:
+        frame = clip.at(t)
+        if frame is None:
             break
+        nxt = max(clip.next_change, t + step)
+        if nxt == float("inf"):
+            out.append({"f": pack(frame), "d": None})
+            break
+        nxt = min(nxt, end)
+        p = pack(frame)
+        if out and out[-1]["f"] == p:
+            out[-1]["d"] = round(out[-1]["d"] + (nxt - t), 4)
+        else:
+            out.append({"f": p, "d": round(nxt - t, 4)})
+        t = nxt
     return out
 
 
@@ -707,6 +717,8 @@ def is_static(spec):
     if kind == "image":
         return len(spec.get("frames") or []) <= 1
     if kind == "text":
+        if textfx.needs_fx(spec):
+            return False
         return (spec.get("motion", "static") == "static"
                 and not float(spec.get("blink", 0) or 0))
     return False

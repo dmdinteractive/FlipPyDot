@@ -13,7 +13,7 @@ fi
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  FLIPDOT CONSOLE V8 — INSTALLATION"
+echo "  FLIPDOT CONSOLE V9 — INSTALLATION"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 echo "[ 1/4 ] Creating virtual environment..."

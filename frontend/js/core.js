@@ -1,9 +1,8 @@
 /**
  * core.js — API access, toasts, and the dot-matrix canvas.
  *
- * DotCanvas draws a bitmap as physical flipdots. PreviewPlayer animates a
- * frame list returned by /api/preview, honouring each frame's own delay — so
- * the preview in the browser runs at the same pace the panel will.
+ * DotCanvas draws frames as physical flipdots. PreviewPlayer animates the
+ * frame list returned by /api/preview at the pace the panel will play it.
  */
 
 const API = window.location.origin;
@@ -59,116 +58,135 @@ function toast(msg, type = "") {
   setTimeout(() => el.remove(), 3000);
 }
 
+// ── Frames ────────────────────────────────────────────────────────
+/**
+ * Frames travel as base64 of the packed bits (row-major, MSB first) —
+ * about 440 bytes for the full 84x42 panel instead of ~11 KB of JSON.
+ */
+function unpack(b64, w, h) {
+  const bin = atob(b64);
+  const out = new Uint8Array(w * h);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = (bin.charCodeAt(i >> 3) >> (7 - (i & 7))) & 1;
+  }
+  return out;
+}
+
 // ── Dot canvas ────────────────────────────────────────────────────
+/**
+ * Draws the panel as round discs. Only dots that changed since the last
+ * frame are repainted, so the monitor can follow the panel at full rate
+ * without the browser breaking a sweat.
+ */
 class DotCanvas {
-  constructor(canvas, {dot = 4, gap = 1, glow = true, dividers = false} = {}) {
+  constructor(canvas, {dot = 4, gap = 1, dividers = false} = {}) {
     this.canvas   = canvas;
     this.ctx      = canvas.getContext("2d");
     this.dot      = dot;
     this.gap      = gap;
-    this.glow     = glow;
     this.dividers = dividers;
-    this.w = 84;
-    this.h = 42;
+    this.w = 0; this.h = 0;
+    this.last = null;
+    this._sprites();
     this.resize(84, 42);
   }
 
+  _sprites() {
+    const mk = (fill, glow) => {
+      const c = document.createElement("canvas");
+      const s = this.dot + this.gap;
+      c.width = c.height = s;
+      const x = c.getContext("2d");
+      x.fillStyle = "#0a0a0a";
+      x.fillRect(0, 0, s, s);
+      if (glow) { x.shadowColor = "rgba(240,238,228,.45)"; x.shadowBlur = 2; }
+      x.fillStyle = fill;
+      x.beginPath();
+      x.arc(this.gap + this.dot / 2, this.gap + this.dot / 2, this.dot / 2 + 0.25, 0, Math.PI * 2);
+      x.fill();
+      return c;
+    };
+    this.onSprite  = mk("#f0eee8", true);
+    this.offSprite = mk("#1c1c19", false);
+  }
+
   resize(w, h) {
-    // Compare against the canvas's real pixel size, not a truthiness check on
-    // canvas.width — a fresh <canvas> already reports 300, so a truthy test
-    // would skip the very first resize and leave the display clipped.
+    if (this.w === w && this.h === h) return;
     const step = this.dot + this.gap;
-    const cw = w * step + this.gap;
-    const ch = h * step + this.gap;
-    if (this.canvas.width === cw && this.canvas.height === ch) return;
-    this.w = w;
-    this.h = h;
-    this.canvas.width  = cw;
-    this.canvas.height = ch;
+    this.w = w; this.h = h;
+    this.canvas.width  = w * step + this.gap;
+    this.canvas.height = h * step + this.gap;
+    this.last = null;
   }
 
-  draw(buf) {
-    if (!buf || !buf.length) return;
-    this.resize(buf[0].length, buf.length);
-
-    const {ctx, dot, gap} = this;
-    const step = dot + gap;
-
-    ctx.fillStyle = "#0a0a0a";
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-
-    if (this.dividers) {
-      ctx.strokeStyle = "#1a1a14";
+  /** bits: Uint8Array(w*h) or array of rows. */
+  draw(bits, w = this.w, h = this.h) {
+    if (!bits) return;
+    if (Array.isArray(bits)) {                 // legacy row arrays
+      h = bits.length; w = bits[0]?.length || 0;
+      bits = Uint8Array.from(bits.flat());
+    }
+    this.resize(w, h);
+    const {ctx} = this;
+    const step = this.dot + this.gap;
+    const full = !this.last;
+    if (full) {
+      ctx.fillStyle = "#0a0a0a";
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+    for (let i = 0; i < w * h; i++) {
+      const v = bits[i];
+      if (!full && this.last[i] === v) continue;
+      ctx.drawImage(v ? this.onSprite : this.offSprite, (i % w) * step, ((i / w) | 0) * step);
+    }
+    this.last = bits;
+    if (full && this.dividers) {
+      ctx.strokeStyle = "#2a2a24";
       ctx.lineWidth = 1;
-      for (let c = 28; c < this.w; c += 28) {
-        const x = c * step;
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, this.canvas.height); ctx.stroke();
+      for (let c = 28; c < w; c += 28) {
+        ctx.beginPath(); ctx.moveTo(c * step + .5, 0); ctx.lineTo(c * step + .5, this.canvas.height); ctx.stroke();
       }
-      for (let r = 7; r < this.h; r += 7) {
-        const y = r * step;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(this.canvas.width, y); ctx.stroke();
+      for (let r = 7; r < h; r += 7) {
+        ctx.beginPath(); ctx.moveTo(0, r * step + .5); ctx.lineTo(this.canvas.width, r * step + .5); ctx.stroke();
       }
     }
-
-    for (let row = 0; row < this.h; row++) {
-      const line = buf[row];
-      if (!line) continue;
-      for (let col = 0; col < this.w; col++) {
-        if (line[col]) {
-          if (this.glow) {
-            ctx.shadowColor = "rgba(240,238,228,0.4)";
-            ctx.shadowBlur  = 2;
-          }
-          ctx.fillStyle = "#f0eee8";
-        } else {
-          ctx.shadowBlur = 0;
-          ctx.fillStyle  = "#141412";
-        }
-        ctx.fillRect(col * step + gap, row * step + gap, dot, dot);
-      }
-    }
-    ctx.shadowBlur = 0;
   }
 
-  blank() {
-    this.draw(Array.from({length: this.h}, () => Array(this.w).fill(0)));
-  }
+  drawPacked(b64, w = this.w, h = this.h) { this.draw(unpack(b64, w, h), w, h); }
+
+  blank() { this.draw(new Uint8Array(this.w * this.h)); }
 }
 
 // ── Preview player ────────────────────────────────────────────────
 /**
- * Plays a frame list from /api/preview on a DotCanvas.
- *
- * Frames carry their own delay, and a frame with hold=true is one the panel
- * would sit on indefinitely — we park on it rather than racing to the next.
+ * Plays /api/preview output: [{f: packed frame, d: seconds | null}].
+ * The server already sampled it at the panel's frame rate and merged
+ * repeats, so what you see here is what the wall will do, beat for beat.
  */
 class PreviewPlayer {
   constructor(dotCanvas) {
-    this.dc     = dotCanvas;
+    this.dc = dotCanvas;
     this.frames = [];
-    this.i      = 0;
-    this.timer  = null;
+    this.i = 0;
+    this.timer = null;
   }
 
-  load(frames) {
+  load(frames, w, h) {
     this.stop();
-    this.frames = frames || [];
+    this.w = w || this.dc.w; this.h = h || this.dc.h;
+    this.frames = (frames || []).map(f => ({bits: unpack(f.f, this.w, this.h), d: f.d}));
     this.i = 0;
-    if (this.frames.length) this._tick();
-    else this.dc.blank();
+    if (this.frames.length) this._tick(); else this.dc.blank();
   }
 
   _tick() {
-    if (!this.frames.length) return;
-    const f = this.frames[this.i % this.frames.length];
-    this.dc.draw(f.bitmap);
-
-    // A single held frame is a still image — nothing to animate.
-    if (f.hold && this.frames.length === 1) return;
-
-    const delay = (f.hold ? 1.0 : (f.delay || 0.05)) * 1000;
+    const f = this.frames[this.i];
+    this.dc.draw(f.bits, this.w, this.h);
+    if (f.d == null) return;                       // hold: a still image
     this.i = (this.i + 1) % this.frames.length;
-    this.timer = setTimeout(() => this._tick(), Math.max(20, delay));
+    // Pause a beat on wrap-around so a loop reads as "again" not "glitch".
+    const extra = this.i === 0 && this.frames.length > 1 ? 600 : 0;
+    this.timer = setTimeout(() => this._tick(), Math.max(16, f.d * 1000) + extra);
   }
 
   stop() {

@@ -4,8 +4,8 @@ wizard.py
 Panel mapping wizard — lights one controller at a time so the user
 can click its position in the browser grid.
 
-Uses direct serial writes with the correct 0x83 command byte,
-reusing the already-open serial connection from app.py.
+Writes 0x83 packets straight to every connected adapter (bypassing the
+frame pump), so it works the same with one USB adapter or several.
 """
 
 import time
@@ -20,12 +20,12 @@ CMD     = 0x83  # AlfaZeta show-now command
 
 class PanelWizard:
 
-    def __init__(self, get_serial_fn, total=18):
+    def __init__(self, write_fn, total=18):
         """
-        get_serial_fn: callable that returns the open serial.Serial object
-        total:         number of controllers to map
+        write_fn: callable(bytes) that writes raw bytes to every adapter
+        total:    number of controllers to map
         """
-        self._get_ser    = get_serial_fn
+        self._write_raw  = write_fn
         self.total       = total
         self.current     = None
         self.mappings    = {}   # address -> {"row": r, "col": c, "half": "top"|"bottom"}
@@ -34,13 +34,11 @@ class PanelWizard:
     # ── Serial helpers ────────────────────────────────────────────
 
     def _write(self, address: int, value: int):
-        ser = self._get_ser()
-        if ser is None or not ser.is_open:
-            log.warning("Wizard: serial not available")
-            return False
         try:
             frame = bytes([0x80, CMD, address] + [value] * 28 + [0x8F])
-            ser.write(frame)
+            if not self._write_raw(frame):
+                log.warning("Wizard: no adapter connected")
+                return False
             return True
         except Exception as e:
             log.error(f"Wizard write error: {e}")

@@ -187,6 +187,16 @@ class Sequencer:
         self._lock     = threading.Lock()
         self.on_change = lambda: None    # host hooks persistence in here
 
+        # Text messages from visitors. The host wires these to the SMS inbox:
+        #   interrupt_pending() -> True when a message is waiting AND messages
+        #                          are allowed to cut into the current step
+        #   interrupt_ready()   -> True when a message is waiting at all
+        #   interrupt_next()    -> [(spec, seconds), ...] to play, or None
+        self.interrupt_pending = lambda: False
+        self.interrupt_ready   = lambda: False
+        self.interrupt_next    = lambda: None
+        self.in_interrupt      = False
+
     # ── playlist CRUD ─────────────────────────────────────────────
     def add_step(self, step, at=None):
         with self._lock:
@@ -318,54 +328,72 @@ class Sequencer:
         return None
 
     def _loop(self):
-        while self.running:
-            now = time.time()
-
-            ov = self._due_overlay(now)
-            if ov:
-                ov.mark_fired(now)
-                log.info(f"Overlay fired: {ov.label or ov.id}")
-                self._player.play(ov.content, duration=ov.duration)
-                self._sleep(ov.duration, allow_overlay=False)
-                self.on_change()
-                continue                 # then fall back into the playlist
-
-            steps = self._enabled_steps()
-            if not steps:
-                self._player.stop(clear=False)
-                self._sleep(0.5)
-                continue
-
-            self.index %= len(steps)
-            step = steps[self.index]
-
-            if step.transition and step.transition.get("animation"):
-                self._player.play(
-                    {"kind": "animation",
-                     "animation": step.transition["animation"],
-                     "params": step.transition.get("params", {})},
-                    loop=False,
-                )
-                self._player.wait(timeout=3.0)
-
-            step.last_run = now
-            self._player.play(step.content, duration=step.duration)
-
-            # Sleep out the step, but stay responsive: an overlay coming due
-            # or a manual next/prev breaks out early.
-            interrupted = self._sleep(step.duration, allow_overlay=True)
-            if interrupted == "overlay":
-                continue                 # replay this same step after the overlay
-            if interrupted == "wake":
-                continue                 # index already moved by next/prev/goto
-
-            self.index += 1
-            if not self.loop and self.index >= len(steps):
-                self.running = False
-                self._player.stop()
-                break
-
+        try:
+            while self.running:
+                try:
+                    self._tick()
+                except Exception as e:
+                    # One bad step or message must not end the show: log it,
+                    # move on, and keep the wall running unattended.
+                    log.error(f"Sequencer error (skipping ahead): {e}", exc_info=True)
+                    self.index += 1
+                    time.sleep(1.0)
+        finally:
+            self.running = False
+            self.in_interrupt = False
         log.info("Sequencer loop exited")
+
+    def _tick(self):
+        now = time.time()
+
+        if self.interrupt_ready():
+            self._play_interrupt()
+            return
+
+        ov = self._due_overlay(now)
+        if ov:
+            ov.mark_fired(now)
+            log.info(f"Overlay fired: {ov.label or ov.id}")
+            self._player.play(ov.content, duration=ov.duration)
+            self._sleep(ov.duration, allow_overlay=False)
+            self.on_change()
+            return                   # then fall back into the playlist
+
+        steps = self._enabled_steps()
+        if not steps:
+            self._player.stop(clear=False)
+            self._sleep(0.5)
+            return
+
+        self.index %= len(steps)
+        step = steps[self.index]
+
+        if step.transition and step.transition.get("animation"):
+            self._player.play(
+                {"kind": "animation",
+                 "animation": step.transition["animation"],
+                 "params": step.transition.get("params", {})},
+                loop=False,
+            )
+            self._player.wait(timeout=3.0)
+
+        step.last_run = now
+        self._player.play(step.content, duration=step.duration)
+
+        # Sleep out the step, but stay responsive: an overlay coming due
+        # or a manual next/prev breaks out early.
+        interrupted = self._sleep(step.duration, allow_overlay=True)
+        if interrupted in ("overlay", "message"):
+            return                   # replay this same step afterwards
+        if interrupted == "wake":
+            return                   # index already moved by next/prev/goto
+
+        self.index += 1
+        if not self.loop and self.index >= len(steps):
+            self.running = False
+            self._player.stop()
+            return
+
 
     def _sleep(self, seconds, allow_overlay=True):
         """Sleep, returning early on overlay/manual-wake. Returns the reason."""
@@ -379,7 +407,29 @@ class Sequencer:
                 return "wake"
             if allow_overlay and self._due_overlay(time.time()):
                 return "overlay"
+            if allow_overlay and self.interrupt_pending():
+                return "message"
         return "stopped"
+
+    def _play_interrupt(self):
+        """Play every waiting visitor message back to back, then return."""
+        self.in_interrupt = True
+        try:
+            self._play_messages()
+        finally:
+            self.in_interrupt = False
+
+    def _play_messages(self):
+        while self.running:
+            parts = self.interrupt_next()
+            if not parts:
+                return
+            for spec, secs in parts:
+                if not self.running:
+                    return
+                self._player.play(spec, duration=secs)
+                if self._sleep(secs, allow_overlay=False) == "wake":
+                    break                # skip pressed: on to the next message
 
     # ── status + persistence ──────────────────────────────────────
     def get_status(self):

@@ -13,59 +13,49 @@
 <header class="header">
   <span class="wordmark">FlipDot</span>
   <div class="header-meta">
-    <div class="conn-indicator" id="conn-indicator">
+    <a class="conn-indicator" href="#setup" title="Hardware settings">
       <div class="conn-dot" id="conn-dot"></div>
       <span id="conn-label">OFFLINE</span>
-    </div>
+    </a>
     <span class="header-clock" id="hdr-clock">00:00:00</span>
-    <button class="hdr-btn" onclick="toggleConnect()">CONNECT</button>
-    <a href="/wizard.html" class="hdr-btn">PANEL WIZARD</a>
   </div>
 </header>
 
 <div class="console">
 
-  <!-- LEFT: monitor -->
+  <!-- LEFT: what the wall is doing right now -->
   <aside class="left-col">
     <div>
-      <div class="monitor-label">PROGRAM MONITOR</div>
+      <div class="monitor-label">ON THE WALL</div>
       <div class="canvas-wrap"><canvas id="display-canvas"></canvas></div>
       <div class="canvas-meta">
-        <span id="canvas-dims">84×42</span>
-        <span id="canvas-fps" style="margin-left:auto">— fps</span>
+        <span id="now-playing">—</span>
+        <span id="canvas-fps" style="margin-left:auto" title="Frames per second actually reaching the panel">— fps</span>
       </div>
+      <div class="canvas-meta dim" id="wire-meta"></div>
     </div>
 
     <div class="quick-btns">
+      <button class="q-btn" onclick="post('/api/display/clear')">BLANK</button>
       <button class="q-btn" onclick="post('/api/display/fill')">FILL</button>
-      <button class="q-btn" onclick="post('/api/display/clear')">CLEAR</button>
-      <button class="q-btn" onclick="post('/api/stop')">STOP</button>
+      <button class="q-btn" onclick="post('/api/stop')">STOP ALL</button>
     </div>
 
-    <div class="port-section">
-      <label class="fl">SERIAL PORT</label>
-      <div class="port-row">
-        <select id="port-select" class="fi"></select>
-        <button class="icon-btn" onclick="scanPorts()" title="Rescan">↻</button>
-      </div>
-    </div>
+    <a class="sms-mini" id="sms-mini" href="#texts"></a>
   </aside>
 
   <!-- RIGHT: workspace -->
   <div class="workspace">
     <nav class="tabs">
-      <button class="tab active" data-tab="sequencer">SEQUENCER</button>
-      <button class="tab" data-tab="compose">COMPOSE</button>
-      <button class="tab" data-tab="sources">DATA</button>
-      <button class="tab" data-tab="variables">TOKENS</button>
-      <button class="tab" data-tab="effects">EFFECTS</button>
-      <button class="tab" data-tab="settings">SETTINGS</button>
+      <button class="tab active" data-tab="playlist">PLAYLIST</button>
+      <button class="tab" data-tab="create">CREATE</button>
+      <button class="tab" data-tab="texts">TEXTS</button>
+      <button class="tab" data-tab="setup">SETUP</button>
     </nav>
 
-    <!-- SEQUENCER -->
-    <div class="pane active" id="pane-sequencer">
+    <!-- PLAYLIST -->
+    <div class="pane active" id="pane-playlist">
       <div class="pane-body wide">
-
         <div class="seq-bar">
           <button class="btn btn-solid" id="seq-play" onclick="seqToggle()">▶ PLAY</button>
           <button class="ic lg" onclick="seqPrev()" title="Previous step">⏮</button>
@@ -75,141 +65,164 @@
           <button class="btn btn-outline btn-sm" onclick="openEditor('step')">+ ADD STEP</button>
         </div>
 
-        <div class="sh">PLAYLIST <span class="sh-note">plays top to bottom, then loops · drag to reorder · double-click to edit</span></div>
+        <div class="sh">PLAYLIST <span class="sh-note">top to bottom, then loops · drag to reorder · double-click to edit</span></div>
         <div class="list-head step-row head">
           <span></span><span>#</span><span>TYPE</span><span>LABEL</span>
           <span>CONTENT</span><span>DUR</span><span>TRANS</span><span></span>
         </div>
         <div id="playlist"></div>
         <div class="empty" id="playlist-empty">
-          No steps yet — add one, or compose something and click “Add to playlist”.
+          No steps yet — make something in Create and click “Add to playlist”.
         </div>
 
-        <div class="sh" style="margin-top:1.5rem">
-          OVERLAYS <span class="sh-note">interrupt the playlist at a set time, then hand control back</span>
-          <button class="btn btn-outline btn-sm" style="float:right"
-                  onclick="openEditor('overlay')">+ ADD OVERLAY</button>
-        </div>
-        <div id="overlays"></div>
-        <div class="empty" id="overlays-empty">No overlays</div>
-
+        <details class="sect">
+          <summary>OVERLAYS <span class="sh-note">cut in at a set time, then hand back to the playlist</span></summary>
+          <div class="btn-row"><button class="btn btn-outline btn-sm" onclick="openEditor('overlay')">+ ADD OVERLAY</button></div>
+          <div id="overlays"></div>
+          <div class="empty" id="overlays-empty">No overlays</div>
+        </details>
       </div>
     </div>
 
-    <!-- COMPOSE -->
-    <div class="pane" id="pane-compose">
+    <!-- CREATE -->
+    <div class="pane" id="pane-create">
       <div class="pane-body wide">
-        <div class="sh">COMPOSE <span class="sh-note">build content, watch it live, then send it or drop it in the playlist</span></div>
         <div id="compose-editor"></div>
-        <div class="btn-row">
-          <button class="btn btn-solid" onclick="composeSend()">SEND TO PANEL →</button>
+        <div class="btn-row sticky-actions">
+          <button class="btn btn-solid" onclick="composeSend()">SEND TO WALL →</button>
           <button class="btn btn-outline" onclick="composeAddStep()">+ ADD TO PLAYLIST</button>
-          <label class="fl inline">DURATION</label>
-          <input type="number" id="compose-dur" class="fi tiny" value="8" min="0.5" step="0.5">
+          <label class="fl inline">FOR</label>
+          <input type="number" id="compose-dur" class="fi tiny" value="8" min="1" step="1">
+          <span class="fl inline">SECONDS</span>
+          <button class="btn btn-outline btn-sm" id="use-sms-style" onclick="useAsSmsStyle()"
+                  title="Visitor texts will arrive, idle and leave like this">USE FOR VISITOR TEXTS</button>
         </div>
       </div>
     </div>
 
-    <!-- DATA SOURCES -->
-    <div class="pane" id="pane-sources">
+    <!-- TEXTS -->
+    <div class="pane" id="pane-texts">
       <div class="pane-body wide">
-        <div class="sh">DATA SOURCES
-          <span class="sh-note">each one becomes a set of {tokens} you can drop into any text or dashboard zone</span>
-          <button class="btn btn-outline btn-sm" style="float:right"
-                  onclick="refreshSources()">↻ REFRESH ALL</button>
-        </div>
-        <div id="src-list"></div>
+        <div class="sms-hero" id="sms-hero"></div>
 
-        <div class="sh" style="margin-top:1.5rem">ADD A SOURCE</div>
-        <div class="fg">
-          <div class="ff">
-            <label class="fl">TYPE</label>
-            <select id="src-type" class="fi"></select>
+        <div class="sms-cols">
+          <div>
+            <div class="sh">INBOX <span class="sh-note">newest first · numbers shown as last 4 digits</span>
+              <button class="btn btn-outline btn-sm" style="float:right" onclick="smsSkip()">SKIP CURRENT</button></div>
+            <div id="sms-log"></div>
+
+            <div class="sh" style="margin-top:1.25rem">TRY IT</div>
+            <div class="btn-row" style="margin-top:0">
+              <input type="text" id="sms-test" class="fi" placeholder="Pretend a visitor texted this…" maxlength="300">
+              <button class="btn btn-solid btn-sm" onclick="smsTest()">SEND TEST</button>
+            </div>
           </div>
-        </div>
-        <div id="src-form"></div>
-        <div class="btn-row">
-          <button class="btn btn-outline btn-sm" onclick="testSource()">TEST FETCH</button>
-          <button class="btn btn-solid btn-sm" onclick="addSource()">+ ADD SOURCE</button>
+
+          <div>
+            <div class="sh">HOW THEY APPEAR</div>
+            <div class="fg">
+              <div class="ff"><label class="fl">WHEN A TEXT ARRIVES</label>
+                <select class="fi" id="sms-when">
+                  <option value="interrupt">Cut in right away</option>
+                  <option value="between">Wait for the current step to end</option>
+                </select></div>
+              <div class="ff"><label class="fl">MIN SECONDS ON WALL</label>
+                <input type="number" class="fi" id="sms-seconds" min="2" max="60"></div>
+              <div class="ff"><label class="fl">MAX LENGTH</label>
+                <input type="number" class="fi" id="sms-max" min="10" max="320"></div>
+              <div class="ff"><label class="fl">INTRO CARD</label>
+                <input type="text" class="fi" id="sms-header" placeholder="(none)" maxlength="40"></div>
+            </div>
+            <div class="ed-note" id="sms-style-note"></div>
+
+            <details class="sect">
+              <summary>TWILIO CONNECTION</summary>
+              <div class="fg">
+                <div class="ff"><label class="fl">PHONE NUMBER</label>
+                  <input type="text" class="fi" id="sms-number" placeholder="+17205550123"></div>
+                <div class="ff"><label class="fl">CHECK EVERY (s)</label>
+                  <input type="number" class="fi" id="sms-poll" min="2" max="60"></div>
+              </div>
+              <div class="fg">
+                <div class="ff-wide"><label class="fl">ACCOUNT SID</label>
+                  <input type="text" class="fi" id="sms-sid" placeholder="AC…"></div>
+                <div class="ff-wide"><label class="fl">AUTH TOKEN</label>
+                  <input type="password" class="fi" id="sms-token"></div>
+              </div>
+              <div class="fg">
+                <div class="ff"><label class="fl">HOW MESSAGES ARRIVE</label>
+                  <select class="fi" id="sms-mode">
+                    <option value="poll">Mac checks Twilio (no network setup)</option>
+                    <option value="webhook">Twilio calls the Mac (needs public URL)</option>
+                  </select></div>
+                <div class="ff-wide"><label class="fl">PUBLIC URL (webhook only)</label>
+                  <input type="text" class="fi" id="sms-url" placeholder="https://…/api/sms/twilio"></div>
+              </div>
+              <div class="ff-wide"><label class="fl">AUTO-REPLY <span class="sh-note">blank = no reply · {position} = place in line · sending replies needs carrier (A2P) registration</span></label>
+                <input type="text" class="fi" id="sms-reply" placeholder="Thanks! You're #{position} in line for the wall."></div>
+            </details>
+            <div class="btn-row"><button class="btn btn-solid btn-sm" onclick="smsSave()">SAVE</button></div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- TOKENS -->
-    <div class="pane" id="pane-variables">
-      <div class="pane-body">
-        <div class="sh">TOKENS
-          <span class="sh-note">live values you can use anywhere — with filters like |upper |trunc:20 |round:0</span>
-          <button class="btn btn-outline btn-sm" style="float:right"
-                  onclick="refreshVarGrid()">↻</button>
-        </div>
-        <div id="var-grid" class="var-grid"></div>
+    <!-- SETUP -->
+    <div class="pane" id="pane-setup">
+      <div class="pane-body wide">
 
-        <div class="sh" style="margin-top:1.5rem">TRY IT</div>
-        <div class="ff">
-          <input type="text" id="var-test" class="fi"
-                 placeholder="M{quake_mag} {quake_place|upper|trunc:24}">
-        </div>
-        <div class="var-preview" id="var-test-out"></div>
-        <div class="btn-row">
-          <button class="btn btn-outline btn-sm" onclick="testToken()">PREVIEW</button>
-        </div>
+        <details class="sect" open>
+          <summary>HARDWARE <span class="sh-note">USB adapters, which controller is on which, and speed</span></summary>
+          <div id="hw"></div>
+        </details>
 
-        <div class="sh" style="margin-top:1.5rem">FILTERS</div>
-        <div class="filter-help">
-          <div><code>|upper</code> <code>|lower</code> <code>|title</code> — change case</div>
-          <div><code>|trunc:24</code> — cut to 24 chars with an ellipsis (fit it on the panel)</div>
-          <div><code>|round:0</code> <code>|int</code> <code>|abs</code> — numbers</div>
-          <div><code>|pad:8</code> <code>|padl:8</code> — pad right / left, for lining up columns</div>
-          <div><code>|fmt:%H:%M</code> — format a time, e.g. <code>{now|fmt:%I:%M %p}</code></div>
-          <div><code>|default:NONE</code> — what to show when the value is missing</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- EFFECTS -->
-    <div class="pane" id="pane-effects">
-      <div class="pane-body">
-        <div class="sh">EFFECTS <span class="sh-note">layered over whatever is playing, without altering it</span></div>
-        <div class="fg">
-          <div class="ff">
-            <label class="fl">EFFECT</label>
-            <select id="fx-type" class="fi"></select>
+        <details class="sect">
+          <summary>DATA SOURCES &amp; TOKENS <span class="sh-note">live values for {tokens} in any text</span></summary>
+          <div id="src-list"></div>
+          <div class="sh-sm">ADD A SOURCE</div>
+          <div class="fg"><div class="ff"><label class="fl">TYPE</label><select id="src-type" class="fi"></select></div></div>
+          <div id="src-form"></div>
+          <div class="btn-row">
+            <button class="btn btn-outline btn-sm" onclick="testSource()">TEST FETCH</button>
+            <button class="btn btn-solid btn-sm" onclick="addSource()">+ ADD SOURCE</button>
+            <button class="btn btn-outline btn-sm" onclick="refreshSources()">↻ REFRESH ALL</button>
           </div>
-          <div class="ff">
-            <label class="fl">NAME</label>
-            <input type="text" id="fx-name" class="fi" value="fx1">
+          <div class="filter-help">
+            Filters: <code>|upper</code> <code>|lower</code> <code>|trunc:24</code> <code>|round:0</code>
+            <code>|pad:8</code> <code>|fmt:%I:%M %p</code> <code>|default:NONE</code>
           </div>
-        </div>
-        <div id="fx-params"></div>
-        <div class="btn-row">
-          <button class="btn btn-solid btn-sm" onclick="addFx()">+ ADD EFFECT</button>
-          <button class="btn btn-outline btn-sm" onclick="clearFx()">CLEAR ALL</button>
-        </div>
-        <div id="fx-list" style="margin-top:1rem"></div>
-      </div>
-    </div>
+        </details>
 
-    <!-- SETTINGS -->
-    <div class="pane" id="pane-settings">
-      <div class="pane-body">
-        <div class="sh">SHOWS</div>
-        <div class="btn-row">
-          <input type="text" id="show-name" class="fi" placeholder="my_show" style="max-width:200px">
-          <button class="btn btn-solid btn-sm" onclick="saveShow()">SAVE SHOW</button>
-          <button class="btn btn-outline btn-sm" onclick="loadShowList()">↻</button>
-        </div>
-        <div id="show-list" style="margin-top:0.75rem"></div>
+        <details class="sect">
+          <summary>LIVE EFFECTS <span class="sh-note">layered over whatever is playing</span></summary>
+          <div class="fg">
+            <div class="ff"><label class="fl">EFFECT</label><select id="fx-type" class="fi"></select></div>
+          </div>
+          <div id="fx-params"></div>
+          <div class="btn-row">
+            <button class="btn btn-solid btn-sm" onclick="addFx()">+ ADD</button>
+            <button class="btn btn-outline btn-sm" onclick="clearFx()">CLEAR ALL</button>
+          </div>
+          <div id="fx-list"></div>
+        </details>
 
-        <div class="sh" style="margin-top:1.5rem">FONTS</div>
-        <div id="font-list"></div>
-        <div class="btn-row">
-          <input type="file" id="font-file" accept=".ttf,.otf" class="fi" style="padding:3px;max-width:240px">
-          <button class="btn btn-outline btn-sm" onclick="uploadFont()">UPLOAD FONT</button>
-        </div>
+        <details class="sect">
+          <summary>SHOWS <span class="sh-note">save / load the whole playlist</span></summary>
+          <div class="btn-row">
+            <input type="text" id="show-name" class="fi" placeholder="my_show" style="max-width:200px">
+            <button class="btn btn-solid btn-sm" onclick="saveShow()">SAVE SHOW</button>
+          </div>
+          <div id="show-list"></div>
+        </details>
 
-        <div class="sh" style="margin-top:1.5rem">SYSTEM</div>
-        <div id="sys-info" class="sys-info"></div>
+        <details class="sect">
+          <summary>FONTS</summary>
+          <div id="font-list"></div>
+          <div class="btn-row">
+            <input type="file" id="font-file" accept=".ttf,.otf" class="fi" style="padding:3px;max-width:240px">
+            <button class="btn btn-outline btn-sm" onclick="uploadFont()">UPLOAD FONT</button>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -233,19 +246,13 @@
 </div>
 <div class="drawer-scrim" id="drawer-scrim" onclick="closeDrawer()"></div>
 
-<footer class="statusbar">
-  <span id="sb-conn">SERIAL: OFFLINE</span>
-  <span class="sb-sep">|</span>
-  <span id="sb-play">PLAYING: —</span>
-  <span class="sb-right" id="sb-time"></span>
-</footer>
-
 <div id="toasts"></div>
 
 <script src="js/core.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/sequencer.js"></script>
+<script src="js/setup.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -451,3 +451,12 @@ def list_animations():
 def get_animation(name):
     e = ANIMATIONS.get(name)
     return e[0] if e else None
+
+
+# ── Generative visuals (visuals.py) ───────────────────────────────
+# Endless, time-based pieces. They run until the playlist step ends, and they
+# double as moving backgrounds behind text (text spec "bg").
+from visuals import VISUALS as _VISUALS
+
+for _k, (_fn, _name, _params) in _VISUALS.items():
+    ANIMATIONS[_k] = (_fn, _name, "generative", _params)
